@@ -46,4 +46,11 @@
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
 	 */
 	// "services": [  {   "binding": "MY_SERVICE",   "service": "my-service"  } ]
+	,
+	"kv_namespaces": [
+		{
+			"binding": "KV",
+			"id": "morningglory"
+		}
+	]
 }
