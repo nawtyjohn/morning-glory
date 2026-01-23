@@ -9,6 +9,7 @@
 		"cf-typegen": "wrangler types"
 	},
 	"dependencies": {
+		"@jaames/iro": "^5.5.2",
 		"hono": "^4.0.0"
 	},
 	"devDependencies": {

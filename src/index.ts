@@ -7,6 +7,7 @@ declare global {
 }
 
 interface Env {
+  ASSETS: Fetcher;
   KV: KVNamespace;
   TUYA_ACCESS_KEY: string;
   TUYA_SECRET_KEY: string;
@@ -104,154 +105,9 @@ async function sendCommand(commands: Array<{ code: string; value: any }>, env: E
 }
 
 // Simple webapp for sequence input and visualization
-app.get('/', (c) => {
-  return c.html(`
-    <html>
-      <head>
-        <title>Bulb Sequence Editor</title>
-        <style>
-          body { font-family: sans-serif; margin: 2em; }
-          .color-preview { width: 40px; height: 40px; display: inline-block; border: 1px solid #ccc; margin-right: 8px; vertical-align: middle; }
-        </style>
-      </head>
-      <body>
-        <h2>Bulb Sequence Editor</h2>
-        <form id="seqForm">
-          <label>Paste Sequence JSON:<br>
-            <textarea id="seqJson" rows="8" cols="60"></textarea>
-          </label><br><br>
-          <button type="button" onclick="parseSequence()">Parse & Visualize</button>
-        </form>
-        <div id="manualEntry">
-          <h3>Manual Entry</h3>
-          <button type="button" onclick="addStep()">Add Step</button>
-          <div id="steps"></div>
-        </div>
-        <hr>
-        <label>Start Time: <input type="time" id="startTime"></label>
-        <label>Duration (minutes): <input type="number" id="duration" min="1" value="60"></label>
-        <br><br>
-        <button onclick="saveSequence()">Save Sequence to KV</button>
-        <div id="result"></div>
-        <script>
-          let sequence = [];
-          // Load sequence:morning from KV on page load
-          window.addEventListener('DOMContentLoaded', async () => {
-            try {
-              const res = await fetch('/get-sequence');
-              if (res.ok) {
-                const seq = await res.json();
-                if (seq && seq.steps) {
-                  sequence = seq.steps;
-                  document.getElementById('seqJson').value = JSON.stringify(seq, null, 2);
-                  document.getElementById('startTime').value = seq.startTime || '';
-                  document.getElementById('duration').value = seq.duration || 60;
-                  renderSteps();
-                }
-              }
-            } catch (e) {
-              // Ignore load errors
-            }
-          });
-          function parseSequence() {
-            try {
-              sequence = JSON.parse(document.getElementById('seqJson').value).steps || [];
-              renderSteps();
-            } catch (e) {
-              alert('Invalid JSON');
-            }
-          }
-          function addStep() {
-            sequence.push({ work_mode: 'colour', hue: 0, saturation: 0, brightness: 0, on: true });
-            renderSteps();
-          }
-          function renderSteps() {
-            const stepsDiv = document.getElementById('steps');
-            stepsDiv.innerHTML = '';
-            sequence.forEach((step, i) => {
-              let color = '#fff';
-              if (step.work_mode === 'colour') {
-                color = hsvToRgb(step.hue, step.saturation, step.brightness);
-              }
-              let html = '<div data-index="' + i + '">';
-              html += '<span class="color-preview" style="background:' + color + '"></span>';
-              html += 'Mode: <select class="mode-select" data-index="' + i + '">';
-              html += '<option value="colour"' + (step.work_mode==='colour'?' selected':'') + '>Colour</option>';
-              html += '<option value="white"' + (step.work_mode==='white'?' selected':'') + '>White</option>';
-              html += '</select>';
-              if (step.work_mode==='colour') {
-                html += ' Hue: <input type="number" min="0" max="360" class="hue-input" data-index="' + i + '" value="' + step.hue + '">';
-                html += ' Saturation: <input type="number" min="0" max="255" class="sat-input" data-index="' + i + '" value="' + step.saturation + '">';
-                html += ' Brightness: <input type="number" min="0" max="255" class="bright-input" data-index="' + i + '" value="' + step.brightness + '">';
-              } else {
-                html += ' Brightness: <input type="number" min="0" max="255" class="bright-input" data-index="' + i + '" value="' + step.brightness + '">';
-                html += ' Temperature: <input type="number" min="0" max="255" class="temp-input" data-index="' + i + '" value="' + (step.temperature||255) + '">';
-              }
-              html += ' On: <input type="checkbox" class="on-checkbox" data-index="' + i + '"' + (step.on?' checked':'') + '>';
-              html += ' <button class="del-btn" data-index="' + i + '">Delete</button>';
-              html += '</div>';
-              stepsDiv.innerHTML += html;
-            });
-            // Add event listeners (event delegation)
-            stepsDiv.querySelectorAll('.mode-select').forEach(el => {
-              el.onchange = function() { updateStep(this.dataset.index, 'work_mode', this.value); };
-            });
-            stepsDiv.querySelectorAll('.hue-input').forEach(el => {
-              el.onchange = function() { updateStep(this.dataset.index, 'hue', this.value); };
-            });
-            stepsDiv.querySelectorAll('.sat-input').forEach(el => {
-              el.onchange = function() { updateStep(this.dataset.index, 'saturation', this.value); };
-            });
-            stepsDiv.querySelectorAll('.bright-input').forEach(el => {
-              el.onchange = function() { updateStep(this.dataset.index, 'brightness', this.value); };
-            });
-            stepsDiv.querySelectorAll('.temp-input').forEach(el => {
-              el.onchange = function() { updateStep(this.dataset.index, 'temperature', this.value); };
-            });
-            stepsDiv.querySelectorAll('.on-checkbox').forEach(el => {
-              el.onchange = function() { updateStep(this.dataset.index, 'on', this.checked); };
-            });
-            stepsDiv.querySelectorAll('.del-btn').forEach(el => {
-              el.onclick = function() { removeStep(this.dataset.index); };
-            });
-          }
-          function updateStep(i, key, value) {
-            if (key === 'on') value = value ? true : false;
-            else value = key === 'work_mode' ? value : Number(value);
-            sequence[i][key] = value;
-            renderSteps();
-          }
-          function removeStep(i) {
-            sequence.splice(i,1);
-            renderSteps();
-          }
-          function hsvToRgb(h,s,v) {
-            s /= 255; v /= 255;
-            let c = v * s, x = c * (1 - Math.abs((h/60)%2-1)), m = v-c;
-            let r=0,g=0,b=0;
-            if (h<60) {r=c;g=x;} else if (h<120) {r=x;g=c;} else if (h<180) {g=c;b=x;} else if (h<240) {g=x;b=c;} else if (h<300) {r=x;b=c;} else {r=c; b=x;}
-            r=Math.round((r+m)*255);g=Math.round((g+m)*255);b=Math.round((b+m)*255);
-            return 'rgb(' + r + ',' + g + ',' + b + ')';
-          }
-          async function saveSequence() {
-            const startTime = document.getElementById('startTime').value;
-            const duration = Number(document.getElementById('duration').value);
-            const payload = {
-              steps: sequence,
-              startTime,
-              duration
-            };
-            const res = await fetch('/save-sequence', {
-              method: 'POST',
-              headers: {'Content-Type':'application/json'},
-              body: JSON.stringify(payload)
-            });
-            document.getElementById('result').innerText = await res.text();
-          }
-        </script>
-      </body>
-    </html>
-  `);
+app.get('/', async (c) => {
+  // Serve static assets using the ASSETS binding (works in dev and prod)
+  return c.env.ASSETS.fetch(c.req.raw);
 });
 
 // Endpoint to get sequence:morning from KV for webapp loading
