@@ -6,14 +6,15 @@ declare global {
   var __MINIFLARE: boolean | undefined;
 }
 
-// Configuration - these should be Environment Variables in production
-const TUYA_CONFIG = {
-  baseUrl: 'https://openapi.tuyaeu.com',
-  accessKey: 'prfcknctpqmc3c7ptwn4',
-  secretKey: '71bfc400a62f4c74abb2a9d24c744bc0',
-};
+interface Env {
+  KV: KVNamespace;
+  TUYA_ACCESS_KEY: string;
+  TUYA_SECRET_KEY: string;
+  TUYA_BASE_URL: string;
+  TUYA_DEVICE_ID: string;
+}
 
-const DEVICE_ID = '2784505598f4abfaaa40';
+const app = new Hono<{ Bindings: Env }>();
 
 // Access token cache
 let cachedToken: { token: string; expiresAt: number } | null = null;
@@ -31,13 +32,13 @@ function signTuyaRequest(
   const contentHash = crypto.createHash('sha256').update(body || '').digest('hex');
   const stringToSign = [method, contentHash, '', path].join('\n');
   const dataToSign = accessKey + (accessToken || '') + timestamp + stringToSign;
-  
+
   const signature = crypto
     .createHmac('sha256', secretKey)
     .update(dataToSign)
     .digest('hex')
     .toUpperCase();
-  
+
   return {
     't': timestamp,
     'sign': signature,
@@ -47,24 +48,24 @@ function signTuyaRequest(
 }
 
 // Get or refresh access token from Tuya API
-async function getAccessToken(): Promise<string> {
+async function getAccessToken(env: Env): Promise<string> {
   if (cachedToken && cachedToken.expiresAt > Date.now()) {
     return cachedToken.token;
   }
 
   const path = '/v1.0/token?grant_type=1';
-  const signHeaders = signTuyaRequest('GET', path, '', TUYA_CONFIG.accessKey, TUYA_CONFIG.secretKey);
-  
-  const response = await fetch(`${TUYA_CONFIG.baseUrl}${path}`, {
+  const signHeaders = signTuyaRequest('GET', path, '', env.TUYA_ACCESS_KEY, env.TUYA_SECRET_KEY);
+
+  const response = await fetch(`${env.TUYA_BASE_URL}${path}`, {
     method: 'GET',
     headers: {
       ...signHeaders,
       'signVersion': '2.0',
     },
   });
-  
+
   const result = await response.json<any>();
-  
+
   if (result.success && result.result?.access_token) {
     cachedToken = {
       token: result.result.access_token,
@@ -72,19 +73,19 @@ async function getAccessToken(): Promise<string> {
     };
     return cachedToken.token;
   }
-  
+
   throw new Error(`Failed to get access token: ${result.msg || 'Unknown error'}`);
 }
 
 // Send command to Tuya device
-async function sendCommand(commands: Array<{ code: string; value: any }>): Promise<void> {
-  const accessToken = await getAccessToken();
-  const path = `/v1.0/devices/${DEVICE_ID}/commands`;
+async function sendCommand(commands: Array<{ code: string; value: any }>, env: Env): Promise<void> {
+  const accessToken = await getAccessToken(env);
+  const path = `/v1.0/devices/${env.TUYA_DEVICE_ID}/commands`;
   const body = JSON.stringify({ commands });
-  
-  const signHeaders = signTuyaRequest('POST', path, body, TUYA_CONFIG.accessKey, TUYA_CONFIG.secretKey, accessToken);
-  
-  const response = await fetch(`${TUYA_CONFIG.baseUrl}${path}`, {
+
+  const signHeaders = signTuyaRequest('POST', path, body, env.TUYA_ACCESS_KEY, env.TUYA_SECRET_KEY, accessToken);
+
+  const response = await fetch(`${env.TUYA_BASE_URL}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -94,15 +95,13 @@ async function sendCommand(commands: Array<{ code: string; value: any }>): Promi
     },
     body,
   });
-  
+
   const result = await response.json<any>();
-  
+
   if (!result.success) {
     throw new Error(`Failed to control light: ${result.msg} (code: ${result.code})`);
   }
 }
-
-const app = new Hono();
 
 // Simple webapp for sequence input and visualization
 app.get('/', (c) => {
@@ -257,24 +256,24 @@ app.get('/', (c) => {
 
 // Endpoint to get sequence:morning from KV for webapp loading
 app.get('/get-sequence', async (c) => {
-  const seq = await (c.env as Env).KV.get('sequence:morning', 'json');
+  const seq = await c.env.KV.get('sequence:morning', 'json');
   return c.json(seq || {});
 });
 
 
 // Save sequence to KV
-app.post('/save-sequence', async (c) => {
+app.post('/save-sequence', async (c,) => {
   const body = await c.req.json();
   const key = 'sequence:morning';
-  await (c.env as Env).KV.put(key, JSON.stringify(body));
+  await c.env.KV.put(key, JSON.stringify(body));
   return c.text(`Saved as ${key}`);
 });
 
 export default {
   fetch: app.fetch,
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-     console.log("Scheduled event triggered at", new Date().toISOString());
-     console.log("Raw controller.scheduledTime:", controller.scheduledTime, "=>", new Date(controller.scheduledTime).toISOString());
+    console.log("Scheduled event triggered at", new Date().toISOString());
+    console.log("Raw controller.scheduledTime:", controller.scheduledTime, "=>", new Date(controller.scheduledTime).toISOString());
     // Always use the sequence named 'morning'
     const key = 'sequence:morning';
     const seqData = (await env.KV.get(key, 'json')) as {
@@ -338,7 +337,7 @@ export default {
       commands = [{ code: 'switch_led', value: step.on }];
     }
     try {
-      await sendCommand(commands);
+      await sendCommand(commands, env);
       console.info(`Played step ${stepIdx + 1}/${stepCount} at ${scheduledDate.toISOString()}`);
     } catch (error) {
       console.error('Error sending command:', error);

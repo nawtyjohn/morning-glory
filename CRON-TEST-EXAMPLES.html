@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Local Cron Trigger Testing Examples</title>
+  <style>
+    body { font-family: sans-serif; margin: 2em; }
+    table { border-collapse: collapse; margin-top: 1em; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    th { background: #f0f0f0; }
+    a { color: #007acc; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <h1>Local Cron Trigger Testing Examples</h1>
+  <p>Below are clickable links to test your 7-step sequence scheduled from <strong>07:00 UTC</strong> for <strong>35 minutes</strong> on <strong>January 23, 2026</strong>. Each step lasts 5 minutes. For each step, there is a link for just before and just after the step should trigger.</p>
+  <p>Replace <code>localhost:8787</code> with your actual dev server address/port if different.</p>
+
+  <h2>Step timing (7 steps, 35 minutes)</h2>
+  <ul>
+    <li>Start: 07:00 UTC</li>
+    <li>Duration: 35 minutes</li>
+    <li>Step length: 5 minutes</li>
+    <li>Date: January 23, 2026</li>
+  </ul>
+
+  <h2>Test links for each step</h2>
+  <table>
+    <tr>
+      <th>Step</th>
+      <th>Before (UTC)</th>
+      <th>After (UTC)</th>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td><a href="http://localhost:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*&time=1769151599000" target="_blank">06:59:59</a></td>
+      <td><a href="http://localhost:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*&time=1769151600000" target="_blank">07:00:00</a></td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td><a href="http://localhost:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*&time=1769151899000" target="_blank">07:04:59</a></td>
+      <td><a href="http://localhost:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*&time=1769151900000" target="_blank">07:05:00</a></td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td><a href="http://localhost:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*&time=1769152199000" target="_blank">07:09:59</a></td>
+      <td><a href="http://localhost:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*&time=1769152200000" target="_blank">07:10:00</a></td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td><a href="http://localhost:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*&time=1769152499000" target="_blank">07:14:59</a></td>
+      <td><a href="http://localhost:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*&time=1769152500000" target="_blank">07:15:00</a></td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td><a href="http://localhost:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*&time=1769152799000" target="_blank">07:19:59</a></td>
+      <td><a href="http://localhost:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*&time=1769152800000" target="_blank">07:20:00</a></td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td><a href="http://localhost:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*&time=1769153099000" target="_blank">07:24:59</a></td>
+      <td><a href="http://localhost:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*&time=1769153100000" target="_blank">07:25:00</a></td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td><a href="http://localhost:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*&time=1769153399000" target="_blank">07:29:59</a></td>
+      <td><a href="http://localhost:8787/cdn-cgi/handler/scheduled?cron=*+*+*+*+*&time=1769153400000" target="_blank">07:30:00</a></td>
+    </tr>
+  </table>
+
+  <h2>How to use</h2>
+  <ul>
+    <li>Click the "Before" link to test just before a step should trigger (should not play).</li>
+    <li>Click the "After" link to test just after a step should trigger (should play that step).</li>
+    <li>Watch your Worker logs and bulb for results.</li>
+  </ul>
+
+  <hr>
+  <p>For more info, see <a href="https://developers.cloudflare.com/workers/configuration/cron-triggers/" target="_blank">Cloudflare Cron Triggers Docs</a></p>
+</body>
+</html>
