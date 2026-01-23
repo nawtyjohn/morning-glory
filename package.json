@@ -17,6 +17,6 @@
 		"node-fetch": "^2.7.0",
 		"readline-sync": "^1.4.10",
 		"typescript": "^5.5.2",
-		"wrangler": "^4.59.2"
+		"wrangler": "^4.60.0"
 	}
 }

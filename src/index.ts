@@ -104,21 +104,6 @@ async function sendCommand(commands: Array<{ code: string; value: any }>): Promi
 
 const app = new Hono();
 
-
-
-app.post('/test-cron', async (c) => {
-  // Restrict to local/dev only using Miniflare global
-  if (!globalThis.__MINIFLARE) {
-    return c.text('Forbidden: Only available in local/dev mode', 403);
-  }
-  if (typeof (c.env as Env).KV === 'undefined') {
-    return c.text('KV not available');
-  }
-  // Simulate scheduled event
-  await exports.scheduled({}, c.env as Env, {});
-  return c.text('Scheduled handler invoked');
-});
-
 // Simple webapp for sequence input and visualization
 app.get('/', (c) => {
   return c.html(`
@@ -151,6 +136,24 @@ app.get('/', (c) => {
         <div id="result"></div>
         <script>
           let sequence = [];
+          // Load sequence:morning from KV on page load
+          window.addEventListener('DOMContentLoaded', async () => {
+            try {
+              const res = await fetch('/get-sequence');
+              if (res.ok) {
+                const seq = await res.json();
+                if (seq && seq.steps) {
+                  sequence = seq.steps;
+                  document.getElementById('seqJson').value = JSON.stringify(seq, null, 2);
+                  document.getElementById('startTime').value = seq.startTime || '';
+                  document.getElementById('duration').value = seq.duration || 60;
+                  renderSteps();
+                }
+              }
+            } catch (e) {
+              // Ignore load errors
+            }
+          });
           function parseSequence() {
             try {
               sequence = JSON.parse(document.getElementById('seqJson').value).steps || [];
@@ -252,10 +255,17 @@ app.get('/', (c) => {
   `);
 });
 
+// Endpoint to get sequence:morning from KV for webapp loading
+app.get('/get-sequence', async (c) => {
+  const seq = await (c.env as Env).KV.get('sequence:morning', 'json');
+  return c.json(seq || {});
+});
+
+
 // Save sequence to KV
 app.post('/save-sequence', async (c) => {
   const body = await c.req.json();
-  const key = `sequence:${Date.now()}`;
+  const key = 'sequence:morning';
   await (c.env as Env).KV.put(key, JSON.stringify(body));
   return c.text(`Saved as ${key}`);
 });
@@ -263,34 +273,50 @@ app.post('/save-sequence', async (c) => {
 export default {
   fetch: app.fetch,
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    console.log("Scheduled event triggered at", new Date().toISOString());
-    // Assume only one active sequence for simplicity
-    // Key format: sequence:<timestamp>
-    const keys = await env.KV.list({ prefix: 'sequence:' });
-    if (!keys.keys.length) return;
-    // Use the latest sequence
-    const key = keys.keys[keys.keys.length - 1].name;
+     console.log("Scheduled event triggered at", new Date().toISOString());
+     console.log("Raw controller.scheduledTime:", controller.scheduledTime, "=>", new Date(controller.scheduledTime).toISOString());
+    // Always use the sequence named 'morning'
+    const key = 'sequence:morning';
     const seqData = (await env.KV.get(key, 'json')) as {
       steps: Array<any>;
       startTime: string;
       duration: number;
     } | null;
-    if (!seqData || !seqData.steps || !seqData.startTime || !seqData.duration) return;
+    if (!seqData || !seqData.steps || !seqData.startTime || !seqData.duration) {
+      console.error("Sequence data in KV is missing required fields. Cannot run scheduled event.");
+      return;
+    }
+    console.info(`Found sequence in KV: key=${key}, steps=${seqData.steps.length}, startTime=${seqData.startTime}, duration=${seqData.duration}`);
 
-    // Calculate which step to play
-    const now = new Date();
+    // Calculate which step to play using controller.scheduledTime
+    // Use scheduledDate directly for UTC comparisons
+    const scheduledDate = new Date(controller.scheduledTime);
+    // Log timezone offset and date interpretations for debugging
+    console.log("Timezone offset (minutes):", scheduledDate.getTimezoneOffset());
+    console.log("Scheduled date local:", scheduledDate.toString());
+    console.log("Scheduled date UTC:", scheduledDate.toISOString());
     // Parse start time as today in UTC
     const [h, m] = seqData.startTime.split(':').map(Number);
-    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), h, m, 0, 0));
+    const start = new Date(Date.UTC(scheduledDate.getUTCFullYear(), scheduledDate.getUTCMonth(), scheduledDate.getUTCDate(), h, m, 0, 0));
     const durationMs = seqData.duration * 60 * 1000;
     const end = new Date(start.getTime() + durationMs);
-    if (now < start || now > end) return; // Not in window
+    // Debug logging for time comparison
+    console.log("scheduledDate:", scheduledDate.toISOString());
+    console.log("sequence window start:", start.toISOString());
+    console.log("sequence window end:", end.toISOString());
+    if (scheduledDate < start || scheduledDate > end) {
+      console.info("Current time is outside the sequence window. No step played.");
+      return;
+    }
 
     // Which step?
     const stepCount = seqData.steps.length;
-    const elapsedMs = now.getTime() - start.getTime();
+    const elapsedMs = scheduledDate.getTime() - start.getTime();
     const stepIdx = Math.floor(elapsedMs / (durationMs / stepCount));
-    if (stepIdx < 0 || stepIdx >= stepCount) return;
+    if (stepIdx < 0 || stepIdx >= stepCount) {
+      console.info("Calculated step index is out of bounds. No step played.");
+      return;
+    }
     const step = seqData.steps[stepIdx];
 
     // Build and send command
@@ -313,7 +339,7 @@ export default {
     }
     try {
       await sendCommand(commands);
-      console.log(`Played step ${stepIdx + 1}/${stepCount} at ${now.toISOString()}`);
+      console.info(`Played step ${stepIdx + 1}/${stepCount} at ${scheduledDate.toISOString()}`);
     } catch (error) {
       console.error('Error sending command:', error);
     }
