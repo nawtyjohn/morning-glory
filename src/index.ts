@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { Hono } from 'hono';
 
 // Configuration - these should be Environment Variables in production
 const TUYA_CONFIG = {
@@ -133,17 +134,39 @@ async function flashLight(): Promise<void> {
   }
 }
 
-// Cloudflare Worker handlers
-export default {
-  async fetch(req: Request): Promise<Response> {
-    const url = new URL(req.url);
-    url.pathname = '/__scheduled';
-    url.searchParams.append('cron', '* * * * *');
-    return new Response(
-      `To test the scheduled handler, use "--test-scheduled" flag and run: curl ${url.href}`
-    );
-  },
+// Hono app for HTTP endpoints
+const app = new Hono();
 
+app.get('/', (c) => {
+  const url = new URL(c.req.url);
+  url.searchParams.append('cron', '* * * * *');
+  return c.text(`To test the scheduled handler, use "--test-scheduled" flag and run: curl ${url.href}`);
+});
+
+
+// GET /status endpoint: returns the lightbulb's JSON status
+app.get('/status', async (c) => {
+  try {
+    const accessToken = await getAccessToken();
+    const path = `/v1.0/devices/${DEVICE_ID}/status`;
+    const signHeaders = signTuyaRequest('GET', path, '', TUYA_CONFIG.accessKey, TUYA_CONFIG.secretKey, accessToken);
+    const response = await fetch(`${TUYA_CONFIG.baseUrl}${path}`, {
+      method: 'GET',
+      headers: {
+        ...signHeaders,
+        'access_token': accessToken,
+        'signVersion': '2.0',
+      },
+    });
+    const result = await response.json();
+    return c.json(result);
+  } catch (error: any) {
+    return c.json({ error: error.message || String(error) }, 500);
+  }
+});
+
+export default {
+  fetch: app.fetch,
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     const hour = new Date().getUTCHours();
     console.log(`Cron triggered at ${hour}:00 UTC`);

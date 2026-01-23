@@ -1,3 +1,4 @@
+bulb-sequence-*.json
 # Logs
 
 logs
@@ -165,3 +166,4 @@ dist
 .env*
 !.env.example
 .wrangler/
+bulb-sequence-1769184176511.json
