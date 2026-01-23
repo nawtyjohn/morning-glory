@@ -96,13 +96,47 @@ async function getBulbStatus() {
   if (!result.success) throw new Error('Tuya API error: ' + (result.msg || 'Unknown error'));
   const statusArr = result.result || [];
   const state = {};
+  let workMode = undefined;
+  let colorObj = undefined;
   for (const item of statusArr) {
     if (item.code === 'switch_led') state.on = item.value;
+    if (item.code === 'work_mode') {
+      workMode = item.value;
+    }
     if (item.code === 'bright_value') state.brightness = item.value;
-    if (item.code === 'colour_data') state.color = item.value;
     if (item.code === 'temp_value') state.temperature = item.value;
+    if (item.code === 'colour_data') {
+      try {
+        colorObj = JSON.parse(item.value);
+      } catch {
+        colorObj = item.value;
+      }
+    }
   }
-  return state;
+  if (workMode === 'white') {
+    // Only keep brightness and temperature
+    return {
+      on: state.on,
+      work_mode: 'white',
+      brightness: state.brightness,
+      temperature: state.temperature
+    };
+  } else if (workMode === 'colour' && colorObj) {
+    // Only keep hue, saturation, brightness
+    return {
+      on: state.on,
+      work_mode: 'colour',
+      hue: colorObj.h,
+      saturation: colorObj.s,
+      brightness: colorObj.v
+    };
+  } else {
+    // Fallback: just return on and work_mode
+    return {
+      on: state.on,
+      work_mode: workMode
+    };
+  }
 }
 
 async function main() {
