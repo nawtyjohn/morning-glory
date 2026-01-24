@@ -110,7 +110,7 @@ async function sendCommand(commands: Array<{ code: string; value: any }>, env: E
   });
 
   const result = await response.json<any>();
-  console.log('Tuya API response:', JSON.stringify(result));
+  //console.log('Tuya API response:', JSON.stringify(result));
   if (!result.success) {
     console.error('Tuya API command payload on error:', JSON.stringify(commands));
     throw new Error(`Failed to control light: ${result.msg} (code: ${result.code})`);
