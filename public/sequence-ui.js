@@ -1,5 +1,115 @@
 
-// --- ADVANCED UI LOGIC RESTORED ---
+// --- ADVANCED UI LOGIC RESTORED + BULB CONTROL/REPLAY ---
+// Helper: send color to bulb (live sync)
+async function sendColorToBulb(hue, saturation, brightness) {
+    if (!window.bulbIsOn) return;
+    await fetch('/bulb/color', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hue, saturation, brightness })
+    });
+}
+
+// Helper: turn bulb on/off
+async function setBulbOn(on) {
+    window.bulbIsOn = on;
+    const statusEl = document.getElementById('bulbStatus');
+    if (statusEl) statusEl.innerText = on ? 'Bulb is ON' : 'Bulb is OFF';
+    await fetch('/bulb/power', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ on })
+    });
+}
+
+// Setup event listeners for controls (on DOMContentLoaded)
+window.addEventListener('DOMContentLoaded', () => {
+    const liveSyncCheckbox = document.getElementById('liveSyncCheckbox');
+    if (liveSyncCheckbox) {
+        liveSyncCheckbox.addEventListener('change', function() {
+            window.liveSyncEnabled = this.checked;
+        });
+    }
+    const bulbOnBtn = document.getElementById('bulbOnBtn');
+    if (bulbOnBtn) bulbOnBtn.addEventListener('click', () => setBulbOn(true));
+    const bulbOffBtn = document.getElementById('bulbOffBtn');
+    if (bulbOffBtn) bulbOffBtn.addEventListener('click', () => setBulbOn(false));
+});
+
+// --- Live Step Replay Logic ---
+let playingStepIdx = null;
+function highlightStep(idx) {
+    document.querySelectorAll('#steps > div').forEach((el, i) => {
+        el.style.background = (i === idx) ? '#ffe066' : '';
+    });
+}
+
+async function playStep(idx) {
+    if (idx < 0 || idx >= window.sequence.length) return;
+    playingStepIdx = idx;
+    highlightStep(idx);
+    const step = window.sequence[idx];
+    if (window.liveSyncEnabled) {
+        if (step.work_mode === 'white') {
+            await fetch('/bulb/color', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    work_mode: 'white',
+                    brightness: step.brightness,
+                    temperature: step.temperature
+                })
+            });
+        } else {
+            await fetch('/bulb/color', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    hue: step.hue,
+                    saturation: step.saturation,
+                    brightness: step.brightness
+                })
+            });
+        }
+    }
+}
+
+function resetPlaySequence() {
+    playingStepIdx = null;
+    highlightStep(-1);
+    const playBtn = document.getElementById('playSequenceBtn');
+    const nextBtn = document.getElementById('nextStepBtn');
+    if (playBtn) playBtn.style.display = '';
+    if (nextBtn) nextBtn.style.display = 'none';
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    const playBtn = document.getElementById('playSequenceBtn');
+    const nextBtn = document.getElementById('nextStepBtn');
+    if (playBtn && nextBtn) {
+        playBtn.addEventListener('click', async () => {
+            if (!window.sequence.length) return;
+            await playStep(0);
+            playBtn.style.display = 'none';
+            nextBtn.style.display = '';
+        });
+        nextBtn.addEventListener('click', async () => {
+            if (playingStepIdx === null) return;
+            if (playingStepIdx < window.sequence.length - 1) {
+                await playStep(playingStepIdx + 1);
+            } else {
+                resetPlaySequence();
+            }
+        });
+    }
+});
+
+// Patch renderSteps to highlight playing step
+const origRenderSteps = renderSteps;
+renderSteps = function() {
+    origRenderSteps();
+    if (playingStepIdx !== null) highlightStep(playingStepIdx);
+}
 window.sequence = window.sequence || [];
 window.liveSyncEnabled = window.liveSyncEnabled || false;
 window.bulbIsOn = window.bulbIsOn || false;
