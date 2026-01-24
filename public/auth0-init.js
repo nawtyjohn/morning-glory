@@ -41,13 +41,16 @@ async function updateAuthUI() {
     const isAuthenticated = await auth0Client.isAuthenticated();
     document.getElementById('loginBtn').style.display = isAuthenticated ? 'none' : '';
     document.getElementById('logoutBtn').style.display = isAuthenticated ? '' : 'none';
+    const appContainer = document.getElementById('app-container');
     if (isAuthenticated) {
         const user = await auth0Client.getUser();
         document.getElementById('userInfo').textContent = `Logged in as: ${user.name || user.email}`;
         accessToken = await auth0Client.getTokenSilently();
+        if (appContainer) appContainer.style.display = '';
     } else {
         document.getElementById('userInfo').textContent = '';
         accessToken = null;
+        if (appContainer) appContainer.style.display = 'none';
     }
 }
 

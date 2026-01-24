@@ -108,9 +108,35 @@ async function sendCommand(commands: Array<{ code: string; value: any }>, env: E
 }
 
 // Simple webapp for sequence input and visualization
+// Auth0 JWT and "owner" role check. Serve user.html if authorized, public.html otherwise.
+import { jwtVerify } from 'jose';
+
 app.get('/', async (c) => {
-  // Serve static assets using the ASSETS binding (works in dev and prod)
-  return c.env.ASSETS.fetch(c.req.raw);
+  const url = new URL(c.req.url);
+  const authHeader = c.req.header('Authorization');
+  let serveUser = false;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    try {
+      // Use Auth0 JWKS endpoint for signature verification
+      const jwksUri = `https://${c.env.AUTH0_DOMAIN}/.well-known/jwks.json`;
+      const { createRemoteJWKSet } = await import('jose');
+      const JWKS = createRemoteJWKSet(new URL(jwksUri));
+      const { payload } = await jwtVerify(token, JWKS, {
+        issuer: `https://${c.env.AUTH0_DOMAIN}/`,
+        audience: c.env.AUTH0_CLIENT_ID,
+      });
+      // Check for owner role in custom claim
+      const roles = payload['https://jonbreen.uk/roles'];
+      if (Array.isArray(roles) && roles.includes('owner')) {
+        serveUser = true;
+      }
+    } catch (e) {
+      // Invalid token or no owner role
+    }
+  }
+  const assetPath = serveUser ? '/user.html' : '/public.html';
+  return c.env.ASSETS.fetch(new Request(url.origin + assetPath, c.req.raw));
 });
 
 // Endpoint to get sequence:morning from KV for webapp loading

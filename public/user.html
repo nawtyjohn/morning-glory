@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <!-- Auth0 SPA SDK (CDN) -->
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.11/auth0-spa-js.production.js" defer></script>
+    <title>Bulb Sequence Editor</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 2em;
+        }
+        .color-preview {
+            width: 40px;
+            height: 40px;
+            display: inline-block;
+            border: 1px solid #ccc;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+    </style>
+    <script src="/iro.min.js"></script>
+    <script src="/auth0-init.js" defer></script>
+</head>
+<body>
+    <div id="auth0-controls" style="margin-bottom:1em;">
+        <button id="loginBtn" style="display:none;">Log In</button>
+        <button id="logoutBtn" style="display:none;">Log Out</button>
+        <span id="userInfo" style="margin-left:1em;"></span>
+    </div>
+    <div id="app-container">
+        <h2>Bulb Sequence Editor</h2>
+        <div style="margin-bottom:1em; padding:0.5em; background:#f8f8f8; border-radius:6px; border:1px solid #ddd; display:flex; align-items:center; gap:0.5em;">
+            <label style="font-weight:bold;"><input type="checkbox" id="liveSyncCheckbox"> Live Bulb Sync</label>
+            <span id="playControls" style="display:none;">
+                <button id="playSequenceBtn" type="button">Play</button>
+                <button id="nextStepBtn" type="button" style="display:none;">Next Step</button>
+            </span>
+            <button type="button" id="bulbOnBtn">Turn Bulb On</button>
+            <button type="button" id="bulbOffBtn">Turn Bulb Off</button>
+            <span id="bulbStatus" style="margin-left:1em; font-weight:bold;"></span>
+        </div>
+        <button id="toggleJsonBtn" type="button" onclick="toggleJson()">Show Advanced JSON Editor</button>
+        <div id="jsonEditor" style="display:none; margin-top:1em;">
+            <form id="seqForm">
+                <label>Paste Sequence JSON:<br>
+                    <textarea id="seqJson" rows="8" cols="60"></textarea>
+                </label><br><br>
+                <button type="button" onclick="parseSequence()">Parse & Visualize</button>
+            </form>
+        </div>
+        <div id="manualEntry">
+            <h3>Manual Entry</h3>
+            <button type="button" onclick="addStep()">Add Step</button>
+            <div id="steps"></div>
+        </div>
+        <div id="colorPickerModal"
+            style="display:none; position:fixed; top:10%; left:50%; transform:translateX(-50%); background:#fff; border:1px solid #ccc; padding:20px; z-index:1000;">
+            <div id="colorPicker"></div>
+            <div style="margin-top:1em;">
+                <button id="applyColorBtn">Apply</button>
+                <button id="cancelColorBtn">Cancel</button>
+            </div>
+        </div>
+        <hr>
+        <label>Start Time: <input type="time" id="startTime"></label>
+        <label>Duration (minutes): <input type="number" id="duration" min="1" value="60"></label>
+        <br><br>
+        <button onclick="saveSequence()">Save Sequence to KV</button>
+        <div id="result"></div>
+    </div>
+</body>
+</html>

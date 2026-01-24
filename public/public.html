@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sign in to Bulb Sequence Editor</title>
+    <style>
+        body { font-family: sans-serif; margin: 2em; }
+        #auth0-controls { margin-bottom: 2em; }
+    </style>
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.11/auth0-spa-js.production.js" defer></script>
+    <script src="/auth0-init.js" defer></script>
+</head>
+<body>
+    <div id="auth0-controls">
+        <button id="loginBtn" style="display:none;">Log In</button>
+        <button id="logoutBtn" style="display:none;">Log Out</button>
+        <span id="userInfo" style="margin-left:1em;"></span>
+    </div>
+    <div id="public-message">
+        <h2>Welcome to Bulb Sequence Editor</h2>
+        <p>You must sign in to access this application.</p>
+    </div>
+</body>
+</html>
