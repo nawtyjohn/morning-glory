@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
 import crypto from 'crypto';
+import { jwtVerify } from 'jose';
+import sessionHandler from './session-handler';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -49,6 +51,14 @@ function signTuyaRequest(
     'sign_method': 'HMAC-SHA256',
   };
 }
+
+// Logout endpoint: clears the session cookie
+app.get('/logout', (c) => {
+  // Set session cookie to expired
+  c.header('Set-Cookie', 'session=; Path=/; HttpOnly; Secure; SameSite=Lax; Expires=Thu, 01 Jan 1970 00:00:00 GMT');
+  return c.text('Logged out');
+});
+
 
 // Get or refresh access token from Tuya API
 async function getAccessToken(env: Env): Promise<string> {
@@ -106,13 +116,6 @@ async function sendCommand(commands: Array<{ code: string; value: any }>, env: E
     throw new Error(`Failed to control light: ${result.msg} (code: ${result.code})`);
   }
 }
-
-// Simple webapp for sequence input and visualization
-// Auth0 JWT and "owner" role check. Serve user.html if authorized, not-logged-in.html otherwise.
-import { jwtVerify } from 'jose';
-
-// Session check handler
-import sessionHandler from './session-handler';
 
 
 // Block direct access to user.html and not-logged-in.html

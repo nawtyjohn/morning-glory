@@ -35,11 +35,24 @@ async function configureAuth0() {
         // Get id_token and send to /set-session
         const idTokenClaims = await auth0Client.getIdTokenClaims();
         if (idTokenClaims && idTokenClaims.__raw) {
-            await fetch('/set-session', {
+            const resp = await fetch('/set-session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token: idTokenClaims.__raw })
+                body: JSON.stringify({ token: idTokenClaims.__raw }),
+                credentials: 'same-origin'
             });
+            if (resp.status === 403) {
+                // Not authorized: log out from Auth0 and clear cookies
+                if (auth0Client) {
+                    auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
+                }
+                return;
+            }
+            const text = await resp.text();
+            if (text.trim() === 'Session set') {
+                window.location.reload();
+                return;
+            }
         }
         window.history.replaceState({}, document.title, '/');
         // After setting session, check backend session and update UI
@@ -53,17 +66,14 @@ async function checkBackendSession() {
         const res = await fetch('/session', { credentials: 'same-origin' });
         const data = await res.json();
         const loginBtn = document.getElementById('loginBtn');
-        const logoutBtn = document.getElementById('logoutBtn');
         const userInfo = document.getElementById('userInfo');
         const appContainer = document.getElementById('app-container');
         if (data.loggedIn) {
             if (loginBtn) loginBtn.style.display = 'none';
-            if (logoutBtn) logoutBtn.style.display = '';
             if (userInfo) userInfo.textContent = `Logged in as: ${data.user.name || data.user.email || 'user'}`;
             if (appContainer) appContainer.style.display = '';
         } else {
             if (loginBtn) loginBtn.style.display = '';
-            if (logoutBtn) logoutBtn.style.display = 'none';
             if (userInfo) userInfo.textContent = '';
             if (appContainer) appContainer.style.display = 'none';
         }
@@ -78,11 +88,9 @@ async function checkBackendSession() {
 async function updateAuthUI() {
     const isAuthenticated = await auth0Client.isAuthenticated();
     const loginBtn = document.getElementById('loginBtn');
-    const logoutBtn = document.getElementById('logoutBtn');
     const userInfo = document.getElementById('userInfo');
     const appContainer = document.getElementById('app-container');
     if (loginBtn) loginBtn.style.display = isAuthenticated ? 'none' : '';
-    if (logoutBtn) logoutBtn.style.display = isAuthenticated ? '' : 'none';
     if (isAuthenticated) {
         const user = await auth0Client.getUser();
         if (userInfo) userInfo.textContent = `Logged in as: ${user.name || user.email}`;
@@ -107,7 +115,14 @@ window.addEventListener('DOMContentLoaded', () => {
         loginAltBtn.onclick = () => auth0Client && auth0Client.loginWithRedirect();
     }
     if (logoutBtn) {
-        logoutBtn.onclick = () => auth0Client && auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
+        logoutBtn.onclick = async () => {
+            // Clear backend session cookie
+            await fetch('/logout', { credentials: 'same-origin' });
+            // Then log out from Auth0
+            if (auth0Client) {
+                auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
+            }
+        };
     }
     configureAuth0();
 });
