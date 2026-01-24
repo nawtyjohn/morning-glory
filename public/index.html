@@ -2,6 +2,8 @@
 <html>
 
 <head>
+    <!-- Auth0 SPA SDK (CDN) -->
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.11/auth0-spa-js.production.js" defer></script>
     <title>Bulb Sequence Editor</title>
     <style>
         body {
@@ -19,9 +21,15 @@
         }
     </style>
     <script src="/iro.min.js"></script>
+    <script src="/auth0-init.js" defer></script>
 </head>
 
 <body>
+                <div id="auth0-controls" style="margin-bottom:1em;">
+                    <button id="loginBtn" style="display:none;">Log In</button>
+                    <button id="logoutBtn" style="display:none;">Log Out</button>
+                    <span id="userInfo" style="margin-left:1em;"></span>
+                </div>
         <h2>Bulb Sequence Editor</h2>
         <div style="margin-bottom:1em; padding:0.5em; background:#f8f8f8; border-radius:6px; border:1px solid #ddd; display:flex; align-items:center; gap:0.5em;">
             <label style="font-weight:bold;"><input type="checkbox" id="liveSyncCheckbox"> Live Bulb Sync</label>

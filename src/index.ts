@@ -13,6 +13,8 @@ interface Env {
   TUYA_SECRET_KEY: string;
   TUYA_BASE_URL: string;
   TUYA_DEVICE_ID: string;
+  AUTH0_CLIENT_ID: string;
+  AUTH0_DOMAIN: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -165,6 +167,15 @@ app.post('/bulb/power', async (c) => {
   ], c.env);
   return c.text(`Bulb turned ${on ? 'on' : 'off'}`);
 });
+
+// Endpoint to serve Auth0 config to frontend
+app.get('/auth0-config', async (c) => {
+  return c.json({
+    domain: c.env.AUTH0_DOMAIN,
+    client_id: c.env.AUTH0_CLIENT_ID
+  });
+});
+
 
 export default {
   fetch: app.fetch,
