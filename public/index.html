@@ -60,8 +60,46 @@
     <script>
         // Update step times when start time or duration changes
         window.addEventListener('DOMContentLoaded', () => {
+            // Only declare liveSyncCheckbox once
+            window.liveSyncEnabled = document.getElementById('liveSyncCheckbox').checked;
+            console.log('Live Bulb Sync initial:', window.liveSyncEnabled);
+            document.getElementById('liveSyncCheckbox').addEventListener('change', function() {
+                window.liveSyncEnabled = this.checked;
+                console.log('Live Bulb Sync toggled:', window.liveSyncEnabled);
+            });
             document.getElementById('startTime').addEventListener('input', renderSteps);
             document.getElementById('duration').addEventListener('input', renderSteps);
+
+            // Bulb on/off button logic
+            const bulbStatus = document.getElementById('bulbStatus');
+            document.getElementById('bulbOnBtn').addEventListener('click', async () => {
+                bulbStatus.textContent = 'Turning bulb ON...';
+                try {
+                    const res = await fetch('/bulb/power', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ on: true })
+                    });
+                    const text = await res.text();
+                    bulbStatus.textContent = text;
+                } catch (e) {
+                    bulbStatus.textContent = 'Error turning bulb on';
+                }
+            });
+            document.getElementById('bulbOffBtn').addEventListener('click', async () => {
+                bulbStatus.textContent = 'Turning bulb OFF...';
+                try {
+                    const res = await fetch('/bulb/power', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ on: false })
+                    });
+                    const text = await res.text();
+                    bulbStatus.textContent = text;
+                } catch (e) {
+                    bulbStatus.textContent = 'Error turning bulb off';
+                }
+            });
         });
         // Track which white step is being edited with sliders
         let whiteSliderStep = null;
@@ -76,6 +114,8 @@
                 btn.textContent = 'Show Advanced JSON Editor';
             }
         }
+
+        window.toggleJson = toggleJson;
         let sequence = [];
         let currentColorStep = null;
         // Load sequence:morning from KV on page load
@@ -234,13 +274,55 @@
                 };
             });
             stepsDiv.querySelectorAll('.hue-input').forEach(el => {
-                el.onchange = function () { updateStep(this.dataset.index, 'hue', this.value); };
+                function sendLiveColor(idx) {
+                    console.log('sendLiveColor', idx, sequence[idx], 'liveSyncEnabled:', window.liveSyncEnabled);
+                    if (window.liveSyncEnabled) {
+                        const step = sequence[idx];
+                        fetch('/bulb/color', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                hue: step.hue,
+                                saturation: step.saturation,
+                                brightness: step.brightness
+                            })
+                        });
+                    }
+                }
+                el.oninput = function () {
+                    console.log('hue-input oninput', this.dataset.index, this.value, window.liveSyncEnabled);
+                    updateStep(this.dataset.index, 'hue', this.value, true);
+                    sendLiveColor(this.dataset.index);
+                };
+                el.onchange = function () {
+                    console.log('hue-input onchange', this.dataset.index, this.value, window.liveSyncEnabled);
+                    updateStep(this.dataset.index, 'hue', this.value);
+                    sendLiveColor(this.dataset.index);
+                };
             });
             stepsDiv.querySelectorAll('.sat-input').forEach(el => {
-                el.onchange = function () { updateStep(this.dataset.index, 'saturation', this.value); };
+                el.oninput = function () {
+                    console.log('sat-input oninput', this.dataset.index, this.value, liveSyncEnabled);
+                    updateStep(this.dataset.index, 'saturation', this.value, true);
+                    sendLiveColor(this.dataset.index);
+                };
+                el.onchange = function () {
+                    console.log('sat-input onchange', this.dataset.index, this.value, liveSyncEnabled);
+                    updateStep(this.dataset.index, 'saturation', this.value);
+                    sendLiveColor(this.dataset.index);
+                };
             });
             stepsDiv.querySelectorAll('.bright-input').forEach(el => {
-                el.onchange = function () { updateStep(this.dataset.index, 'brightness', this.value); };
+                el.oninput = function () {
+                    console.log('bright-input oninput', this.dataset.index, this.value, liveSyncEnabled);
+                    updateStep(this.dataset.index, 'brightness', this.value, true);
+                    sendLiveColor(this.dataset.index);
+                };
+                el.onchange = function () {
+                    console.log('bright-input onchange', this.dataset.index, this.value, liveSyncEnabled);
+                    updateStep(this.dataset.index, 'brightness', this.value);
+                    sendLiveColor(this.dataset.index);
+                };
             });
             stepsDiv.querySelectorAll('.bright-slider').forEach(el => {
                 const idx = el.dataset.index;
@@ -260,8 +342,40 @@
                 el.oninput = function () {
                     sequence[idx].brightness = Number(this.value);
                     if (preview && tempEl) preview.style.background = tempToRGB(Number(tempEl.value), Number(this.value));
+                    console.log('white bright-slider oninput', idx, this.value, liveSyncEnabled);
+                    if (liveSyncEnabled) {
+                        const step = sequence[idx];
+                        fetch('/bulb/color', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                hue: step.hue || 0,
+                                saturation: step.saturation || 0,
+                                brightness: step.brightness,
+                                temperature: step.temperature || 255,
+                                work_mode: 'white'
+                            })
+                        });
+                    }
                 };
-                el.onchange = function () { renderSteps(); };
+                el.onchange = function () {
+                    renderSteps();
+                    console.log('white bright-slider onchange', idx, this.value, liveSyncEnabled);
+                    if (liveSyncEnabled) {
+                        const step = sequence[idx];
+                        fetch('/bulb/color', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                hue: step.hue || 0,
+                                saturation: step.saturation || 0,
+                                brightness: step.brightness,
+                                temperature: step.temperature || 255,
+                                work_mode: 'white'
+                            })
+                        });
+                    }
+                };
             });
             stepsDiv.querySelectorAll('.temp-slider').forEach(el => {
                 const idx = el.dataset.index;
@@ -281,8 +395,40 @@
                 el.oninput = function () {
                     sequence[idx].temperature = Number(this.value);
                     if (preview && brightEl) preview.style.background = tempToRGB(Number(this.value), Number(brightEl.value));
+                    console.log('white temp-slider oninput', idx, this.value, liveSyncEnabled);
+                    if (liveSyncEnabled) {
+                        const step = sequence[idx];
+                        fetch('/bulb/color', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                hue: step.hue || 0,
+                                saturation: step.saturation || 0,
+                                brightness: step.brightness,
+                                temperature: step.temperature,
+                                work_mode: 'white'
+                            })
+                        });
+                    }
                 };
-                el.onchange = function () { renderSteps(); };
+                el.onchange = function () {
+                    renderSteps();
+                    console.log('white temp-slider onchange', idx, this.value, liveSyncEnabled);
+                    if (liveSyncEnabled) {
+                        const step = sequence[idx];
+                        fetch('/bulb/color', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                hue: step.hue || 0,
+                                saturation: step.saturation || 0,
+                                brightness: step.brightness,
+                                temperature: step.temperature,
+                                work_mode: 'white'
+                            })
+                        });
+                    }
+                };
             });
             stepsDiv.querySelectorAll('.temp-input').forEach(el => {
                 el.onchange = function () { updateStep(this.dataset.index, 'temperature', this.value); };
@@ -302,8 +448,21 @@
             // Store original color for cancel
             window._originalColor = { h: step.hue, s: step.saturation, v: step.brightness };
             // Live preview: update preview color on picker change, but do not update sequence
-            function updateLivePreview() {
+            async function updateLivePreview() {
                 renderSteps();
+                console.log('color:change', liveSyncEnabled, window.iroPicker.color);
+                if (liveSyncEnabled) {
+                    const color = window.iroPicker.color;
+                    await fetch('/bulb/color', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            hue: color.hue,
+                            saturation: Math.round(color.saturation * 2.55),
+                            brightness: Math.round(color.value * 2.55)
+                        })
+                    });
+                }
             }
             function setupPicker() {
                 const h = step.hue || 0;

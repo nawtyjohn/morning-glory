@@ -98,7 +98,7 @@ async function sendCommand(commands: Array<{ code: string; value: any }>, env: E
   });
 
   const result = await response.json<any>();
-
+  console.log('Tuya API response:', JSON.stringify(result));
   if (!result.success) {
     throw new Error(`Failed to control light: ${result.msg} (code: ${result.code})`);
   }
@@ -127,15 +127,30 @@ app.post('/save-sequence', async (c,) => {
 
 // POST /bulb/color { hue, saturation, brightness }
 app.post('/bulb/color', async (c) => {
-  const { hue, saturation, brightness } = await c.req.json();
-  // Tuya expects HSV values in 0-360, 0-100, 0-100
-  // Convert saturation/brightness from 0-255 to 0-100
-  const sat100 = Math.round((saturation / 255) * 100);
-  const bri100 = Math.round((brightness / 255) * 100);
-  await sendCommand([
-    { code: 'colour_data_v2', value: { h: hue, s: sat100, v: bri100 } }
-  ], c.env);
-  return c.text('Bulb color updated');
+  const body = await c.req.json();
+  if (body.work_mode === 'white') {
+    // White mode: set work_mode, then send bright_value and temp_value
+    const bri100 = Math.round((body.brightness / 255) * 100);
+    const temp100 = Math.round((body.temperature / 255) * 100);
+    await sendCommand([
+      { code: 'work_mode', value: 'white' },
+      { code: 'bright_value', value: bri100 },
+      { code: 'temp_value', value: temp100 }
+    ], c.env);
+    return c.text('Bulb white updated');
+  } else {
+    // Colour mode: set work_mode, then send colour_data_v2
+    const { hue, saturation, brightness } = body;
+    // Use same format as async scheduled
+    const payload = [
+      { code: 'work_mode', value: 'colour' },
+      { code: 'colour_data', value: { h: hue, s: saturation, v: brightness } },
+      { code: 'switch_led', value: true }
+    ];
+    console.log('Sending colour_data payload:', JSON.stringify(payload));
+    await sendCommand(payload, c.env);
+    return c.text('Bulb color updated (colour_data object)');
+  }
 });
 
 // POST /bulb/power { on }
