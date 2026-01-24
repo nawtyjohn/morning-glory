@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { stream } from "hono/streaming";
 import crypto from 'crypto';
 
 declare global {
@@ -108,19 +109,24 @@ async function sendCommand(commands: Array<{ code: string; value: any }>, env: E
 }
 
 // Simple webapp for sequence input and visualization
-// Auth0 JWT and "owner" role check. Serve user.html if authorized, public.html otherwise.
+// Auth0 JWT and "owner" role check. Serve user.html if authorized, not-logged-in.html otherwise.
 import { jwtVerify } from 'jose';
 
 
-// Block direct access to user.html and public.html
+// Block direct access to user.html and not-logged-in.html
 app.get('/user.html', (c) => c.text('Forbidden', 403));
-app.get('/public.html', (c) => c.text('Forbidden', 403));
+app.get('/not-logged-in.html', (c) => c.text('Forbidden', 403));
 
 // Main entry: serve correct HTML based on Auth0 JWT/role
 app.get('/', async (c) => {
   const url = new URL(c.req.url);
   const authHeader = c.req.header('Authorization');
   let serveUser = false;
+  console.log('[ROUTE /] Incoming request:', {
+    url: c.req.url,
+    headers: Object.fromEntries(c.req.raw.headers.entries()),
+    authHeader
+  });
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.slice(7);
     try {
@@ -132,17 +138,37 @@ app.get('/', async (c) => {
         issuer: `https://${c.env.AUTH0_DOMAIN}/`,
         audience: c.env.AUTH0_CLIENT_ID,
       });
+      console.log('[ROUTE /] JWT payload:', payload);
       // Check for owner role in custom claim
       const roles = payload['https://jonbreen.uk/roles'];
+      console.log('[ROUTE /] Roles claim:', roles);
       if (Array.isArray(roles) && roles.includes('owner')) {
         serveUser = true;
+        console.log('[ROUTE /] User is owner, will serve user.html');
+      } else {
+        console.log('[ROUTE /] User is not owner, will serve not-logged-in.html');
       }
     } catch (e) {
-      // Invalid token or no owner role
+      console.log('[ROUTE /] JWT verification failed or no owner role:', e);
     }
+  } else {
+    console.log('[ROUTE /] No valid Authorization header, will serve not-logged-in.html');
   }
-  const assetPath = serveUser ? '/user.html' : '/public.html';
-  return c.env.ASSETS.fetch(new Request(url.origin + assetPath, c.req.raw));
+  const assetPath = serveUser ? '/user.html' : '/not-logged-in.html';
+  console.log(`[ROUTE /] Serving asset: ${assetPath}`);
+  const resp = await c.env.ASSETS.fetch(new Request(url.origin + assetPath, c.req.raw));
+  // Clone headers and remove Location
+  const headers = new Headers(resp.headers);
+  headers.delete('Location');
+  headers.set('Content-Type', 'text/html');
+  return stream(c, async (stream) => {
+    stream.onAbort(() => {
+      console.error('Stream aborted!');
+    });
+    if (resp.body) {
+      await stream.pipe(resp.body);
+    }
+  });
 });
 
 // Endpoint to get sequence:morning from KV for webapp loading
