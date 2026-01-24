@@ -264,9 +264,6 @@ app.get('/auth0-config', async (c) => {
 export default {
   fetch: app.fetch,
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    console.log("Scheduled event triggered at", new Date().toISOString());
-    console.log("Raw controller.scheduledTime:", controller.scheduledTime, "=>", new Date(controller.scheduledTime).toISOString());
-    // Always use the sequence named 'morning'
     const key = 'sequence:morning';
     const seqData = (await env.KV.get(key, 'json')) as {
       steps: Array<any>;
@@ -277,26 +274,14 @@ export default {
       console.error("Sequence data in KV is missing required fields. Cannot run scheduled event.");
       return;
     }
-    console.info(`Found sequence in KV: key=${key}, steps=${seqData.steps.length}, startTime=${seqData.startTime}, duration=${seqData.duration}`);
-
-    // Calculate which step to play using controller.scheduledTime
-    // Use scheduledDate directly for UTC comparisons
     const scheduledDate = new Date(controller.scheduledTime);
-    // Log timezone offset and date interpretations for debugging
-    console.log("Timezone offset (minutes):", scheduledDate.getTimezoneOffset());
-    console.log("Scheduled date local:", scheduledDate.toString());
-    console.log("Scheduled date UTC:", scheduledDate.toISOString());
-    // Parse start time as today in UTC
     const [h, m] = seqData.startTime.split(':').map(Number);
     const start = new Date(Date.UTC(scheduledDate.getUTCFullYear(), scheduledDate.getUTCMonth(), scheduledDate.getUTCDate(), h, m, 0, 0));
     const durationMs = seqData.duration * 60 * 1000;
     const end = new Date(start.getTime() + durationMs);
     // Debug logging for time comparison
-    console.log("scheduledDate:", scheduledDate.toISOString());
-    console.log("sequence window start:", start.toISOString());
-    console.log("sequence window end:", end.toISOString());
     if (scheduledDate < start || scheduledDate > end) {
-      console.info("Current time is outside the sequence window. No step played.");
+      //console.info("Current time is outside the sequence window. No step played.");
       return;
     }
 
@@ -305,7 +290,7 @@ export default {
     const elapsedMs = scheduledDate.getTime() - start.getTime();
     const stepIdx = Math.floor(elapsedMs / (durationMs / stepCount));
     if (stepIdx < 0 || stepIdx >= stepCount) {
-      console.info("Calculated step index is out of bounds. No step played.");
+      //console.info("Calculated step index is out of bounds. No step played.");
       return;
     }
     const step = seqData.steps[stepIdx];

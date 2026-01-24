@@ -169,17 +169,19 @@ function getStepTimes() {
     const startTimeStr = document.getElementById('startTime')?.value;
     const duration = Number(document.getElementById('duration')?.value) || 60;
     let times = [];
-    if (!startTimeStr || !/^\d{2}:\d{2}$/.test(startTimeStr)) {
-        for (let i = 0; i < window.sequence.length; ++i) times.push('--:--');
+    const stepCount = window.sequence.length;
+    if (!startTimeStr || !/^\d{2}:\d{2}$/.test(startTimeStr) || stepCount === 0) {
+        for (let i = 0; i < stepCount; ++i) times.push('--:--');
         return times;
     }
     const [h, m] = startTimeStr.split(':').map(Number);
     let totalMinutes = h * 60 + m;
-    for (let i = 0; i < window.sequence.length; ++i) {
+    const stepDuration = duration / stepCount;
+    for (let i = 0; i < stepCount; ++i) {
         let stepH = Math.floor(totalMinutes / 60) % 24;
-        let stepM = totalMinutes % 60;
+        let stepM = Math.round(totalMinutes % 60);
         times.push((stepH < 10 ? '0' : '') + stepH + ':' + (stepM < 10 ? '0' : '') + stepM);
-        totalMinutes += duration;
+        totalMinutes += stepDuration;
     }
     return times;
 }
