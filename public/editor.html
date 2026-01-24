@@ -8,6 +8,12 @@
   </head>
   <body>
     <h2>Bulb Sequence Editor</h2>
+    <div style="margin-bottom:1em; padding:0.5em; background:#f8f8f8; border-radius:6px; border:1px solid #ddd;">
+      <label style="font-weight:bold; margin-right:1em;"><input type="checkbox" id="liveSyncCheckbox"> Live Bulb Sync</label>
+      <button type="button" id="bulbOnBtn" style="margin-right:0.5em;">Turn Bulb On</button>
+      <button type="button" id="bulbOffBtn">Turn Bulb Off</button>
+      <span id="bulbStatus" style="margin-left:1em; font-weight:bold;"></span>
+    </div>
     <form id="seqForm">
       <label>Paste Sequence JSON:<br>
         <textarea id="seqJson" rows="8" cols="60"></textarea>
@@ -32,6 +38,38 @@
     <script>
       let sequence = [];
       let currentColorStep = null;
+      let liveSyncEnabled = false;
+      let bulbIsOn = false;
+
+      // Helper: send color to bulb
+      async function sendColorToBulb(hue, saturation, brightness) {
+        if (!bulbIsOn) return;
+        await fetch('/bulb/color', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hue, saturation, brightness })
+        });
+      }
+
+      // Helper: turn bulb on/off
+      async function setBulbOn(on) {
+        bulbIsOn = on;
+        document.getElementById('bulbStatus').innerText = on ? 'Bulb is ON' : 'Bulb is OFF';
+        await fetch('/bulb/power', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ on })
+        });
+      }
+
+      // Setup event listeners for controls
+      window.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('liveSyncCheckbox').addEventListener('change', function() {
+          liveSyncEnabled = this.checked;
+        });
+        document.getElementById('bulbOnBtn').addEventListener('click', () => setBulbOn(true));
+        document.getElementById('bulbOffBtn').addEventListener('click', () => setBulbOn(false));
+      });
       // Load sequence:morning from KV on page load
       window.addEventListener('DOMContentLoaded', async () => {
         try {
@@ -132,6 +170,9 @@
                 sequence[currentColorStep].saturation = Math.round(color.saturation * 2.55);
                 sequence[currentColorStep].brightness = Math.round(color.value * 2.55);
                 renderSteps();
+                if (liveSyncEnabled && bulbIsOn) {
+                  sendColorToBulb(color.hue, Math.round(color.saturation * 2.55), Math.round(color.value * 2.55));
+                }
               }
             });
           } else {

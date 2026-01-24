@@ -116,13 +116,35 @@ app.get('/get-sequence', async (c) => {
   return c.json(seq || {});
 });
 
-
 // Save sequence to KV
+
 app.post('/save-sequence', async (c,) => {
   const body = await c.req.json();
   const key = 'sequence:morning';
   await c.env.KV.put(key, JSON.stringify(body));
   return c.text(`Saved as ${key}`);
+});
+
+// POST /bulb/color { hue, saturation, brightness }
+app.post('/bulb/color', async (c) => {
+  const { hue, saturation, brightness } = await c.req.json();
+  // Tuya expects HSV values in 0-360, 0-100, 0-100
+  // Convert saturation/brightness from 0-255 to 0-100
+  const sat100 = Math.round((saturation / 255) * 100);
+  const bri100 = Math.round((brightness / 255) * 100);
+  await sendCommand([
+    { code: 'colour_data_v2', value: { h: hue, s: sat100, v: bri100 } }
+  ], c.env);
+  return c.text('Bulb color updated');
+});
+
+// POST /bulb/power { on }
+app.post('/bulb/power', async (c) => {
+  const { on } = await c.req.json();
+  await sendCommand([
+    { code: 'switch_led', value: !!on }
+  ], c.env);
+  return c.text(`Bulb turned ${on ? 'on' : 'off'}`);
 });
 
 export default {

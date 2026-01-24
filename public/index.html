@@ -22,7 +22,13 @@
 </head>
 
 <body>
-    <h2>Bulb Sequence Editor</h2>
+        <h2>Bulb Sequence Editor</h2>
+        <div style="margin-bottom:1em; padding:0.5em; background:#f8f8f8; border-radius:6px; border:1px solid #ddd;">
+            <label style="font-weight:bold; margin-right:1em;"><input type="checkbox" id="liveSyncCheckbox"> Live Bulb Sync</label>
+            <button type="button" id="bulbOnBtn" style="margin-right:0.5em;">Turn Bulb On</button>
+            <button type="button" id="bulbOffBtn">Turn Bulb Off</button>
+            <span id="bulbStatus" style="margin-left:1em; font-weight:bold;"></span>
+        </div>
     <button id="toggleJsonBtn" type="button" onclick="toggleJson()">Show Advanced JSON Editor</button>
     <div id="jsonEditor" style="display:none; margin-top:1em;">
         <form id="seqForm">
