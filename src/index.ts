@@ -133,11 +133,12 @@ app.post('/bulb/color', async (c) => {
       // White mode: clamp brightness to minimum 25
       let brightness = body.brightness;
       if (brightness < 25) brightness = 25;
-      console.log(`[white mode] Requested brightness: ${body.brightness}, sent brightness: ${brightness}`);
+      let temperature = (body.temperature !== undefined && body.temperature !== null) ? body.temperature : 255;
+      console.log(`[white mode] Requested brightness: ${body.brightness}, sent brightness: ${brightness}, temperature: ${temperature}`);
       await sendCommand([
         { code: 'work_mode', value: 'white' },
         { code: 'bright_value', value: brightness },
-        { code: 'temp_value', value: body.temperature },
+        { code: 'temp_value', value: temperature },
         { code: 'switch_led', value: true }
       ], c.env);
       return c.text('Bulb white updated');
