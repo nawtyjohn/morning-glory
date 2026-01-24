@@ -111,10 +111,16 @@ async function sendCommand(commands: Array<{ code: string; value: any }>, env: E
 // Auth0 JWT and "owner" role check. Serve user.html if authorized, not-logged-in.html otherwise.
 import { jwtVerify } from 'jose';
 
+// Session check handler
+import sessionHandler from './session-handler';
+
 
 // Block direct access to user.html and not-logged-in.html
 app.get('/user.html', (c) => c.text('Forbidden', 403));
 app.get('/not-logged-in.html', (c) => c.text('Forbidden', 403));
+
+// Session check endpoint for frontend
+app.get('/session', sessionHandler);
 
 // Main entry: serve correct HTML based on Auth0 JWT/role
 app.get('/', async (c) => {

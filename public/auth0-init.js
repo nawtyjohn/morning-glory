@@ -42,9 +42,37 @@ async function configureAuth0() {
             });
         }
         window.history.replaceState({}, document.title, '/');
+        // After setting session, check backend session and update UI
+        await checkBackendSession();
+        return;
     }
-
     updateAuthUI();
+// Check backend session and update UI accordingly
+async function checkBackendSession() {
+    try {
+        const res = await fetch('/session', { credentials: 'same-origin' });
+        const data = await res.json();
+        const loginBtn = document.getElementById('loginBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const userInfo = document.getElementById('userInfo');
+        const appContainer = document.getElementById('app-container');
+        if (data.loggedIn) {
+            if (loginBtn) loginBtn.style.display = 'none';
+            if (logoutBtn) logoutBtn.style.display = '';
+            if (userInfo) userInfo.textContent = `Logged in as: ${data.user.name || data.user.email || 'user'}`;
+            if (appContainer) appContainer.style.display = '';
+        } else {
+            if (loginBtn) loginBtn.style.display = '';
+            if (logoutBtn) logoutBtn.style.display = 'none';
+            if (userInfo) userInfo.textContent = '';
+            if (appContainer) appContainer.style.display = 'none';
+        }
+    } catch (e) {
+        // fallback to hiding app
+        const appContainer = document.getElementById('app-container');
+        if (appContainer) appContainer.style.display = 'none';
+    }
+}
 }
 
 async function updateAuthUI() {
