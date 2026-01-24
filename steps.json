@@ -1,0 +1,203 @@
+{
+    "steps": [
+        {
+            "work_mode": "colour",
+            "hue": 43,
+            "saturation": 237,
+            "brightness": 3,
+            "on": true,
+            "temperature": 0
+        },
+        {
+            "work_mode": "colour",
+            "hue": 42,
+            "saturation": 252,
+            "brightness": 20,
+            "on": true
+        },
+        {
+            "work_mode": "colour",
+            "hue": 50,
+            "saturation": 217,
+            "brightness": 59,
+            "on": true
+        },
+        {
+            "work_mode": "colour",
+            "hue": 50,
+            "saturation": 217,
+            "brightness": 59,
+            "on": true
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 0,
+            "on": true,
+            "temperature": 0
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 20,
+            "on": true,
+            "temperature": 0
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 40,
+            "on": true,
+            "temperature": 0
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 60,
+            "on": true,
+            "temperature": 0
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 80,
+            "on": true,
+            "temperature": 0
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 100,
+            "on": true,
+            "temperature": 0
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 120,
+            "on": true,
+            "temperature": 0
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 140,
+            "on": true,
+            "temperature": 0
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 160,
+            "on": true,
+            "temperature": 0
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 180,
+            "on": true,
+            "temperature": 0
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 200,
+            "on": true,
+            "temperature": 0
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 220,
+            "on": true,
+            "temperature": 0
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 240,
+            "on": true,
+            "temperature": 0
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 255,
+            "on": true,
+            "temperature": 0
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 255,
+            "on": true,
+            "temperature": 40
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 255,
+            "on": true,
+            "temperature": 80
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 255,
+            "on": true,
+            "temperature": 120
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 255,
+            "on": true,
+            "temperature": 160
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 255,
+            "on": true,
+            "temperature": 200
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 255,
+            "on": true,
+            "temperature": 240
+        },
+        {
+            "work_mode": "white",
+            "hue": 0,
+            "saturation": 0,
+            "brightness": 255,
+            "on": true,
+            "temperature": 255
+        }
+    ],
+    "startTime": "07:00",
+    "duration": 4
+}

@@ -1,4 +1,49 @@
 window.sequence = window.sequence || [];
+
+// Load sequence from backend on page load
+async function loadSequenceFromBackend() {
+    try {
+        const res = await fetch('/get-sequence');
+        const data = await res.json();
+        if (data && Array.isArray(data.steps)) {
+            window.sequence = data.steps;
+            // Set start time and duration if present
+            if (data.startTime) {
+                const startTimeInput = document.getElementById('startTime');
+                if (startTimeInput) startTimeInput.value = String(data.startTime);
+            }
+            if (data.duration) {
+                const durationInput = document.getElementById('duration');
+                let durationVal = data.duration;
+                if (typeof durationVal === 'string') durationVal = Number(durationVal);
+                if (durationInput) durationInput.value = durationVal;
+            }
+        } else {
+            window.sequence = [];
+        }
+        renderSteps();
+    } catch (e) {
+        window.sequence = [];
+        renderSteps();
+    }
+}
+
+function setupTimeInputsRerender() {
+    const startTimeInput = document.getElementById('startTime');
+    const durationInput = document.getElementById('duration');
+    if (startTimeInput) startTimeInput.addEventListener('input', renderSteps);
+    if (durationInput) durationInput.addEventListener('input', renderSteps);
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        loadSequenceFromBackend();
+        setupTimeInputsRerender();
+    });
+} else {
+    loadSequenceFromBackend();
+    setupTimeInputsRerender();
+}
 window.liveSyncEnabled = window.liveSyncEnabled || false;
 window.bulbIsOn = window.bulbIsOn || false;
 let currentColorStep = null;
@@ -11,13 +56,31 @@ function addStep() {
 function renderSteps() {
     const stepsDiv = document.getElementById('steps');
     stepsDiv.innerHTML = '';
+    // Calculate step times
+    let startTime = document.getElementById('startTime')?.value || '';
+    let duration = Number(document.getElementById('duration')?.value || 0);
+    let stepCount = window.sequence.length;
+    let stepMinutes = (stepCount > 0 && duration > 0) ? duration / stepCount : 0;
+    let startHour = 0, startMin = 0;
+    if (/^\d{2}:\d{2}$/.test(startTime)) {
+        [startHour, startMin] = startTime.split(':').map(Number);
+    }
     window.sequence.forEach((step, i) => {
         let color = '#fff';
         if (step.work_mode === 'colour') {
             color = hsvToRgb(step.hue, step.saturation, step.brightness);
         }
+        // Calculate time for this step
+        let stepTime = '';
+        if (stepMinutes > 0) {
+            let totalMinutes = Math.round(startHour * 60 + startMin + i * stepMinutes);
+            let h = Math.floor(totalMinutes / 60) % 24;
+            let m = totalMinutes % 60;
+            stepTime = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+        }
         let html = '<div data-index="' + i + '">';
         html += '<span class="color-preview" style="background:' + color + '" onclick="openColorPicker(' + i + ')"></span>';
+        if (stepTime) html += '<span style="font-weight:bold;margin-right:8px;">' + stepTime + '</span>';
         html += 'Mode: <select class="mode-select" data-index="' + i + '">';
         html += '<option value="colour"' + (step.work_mode==='colour'?' selected':'') + '>Colour</option>';
         html += '<option value="white"' + (step.work_mode==='white'?' selected':'') + '>White</option>';

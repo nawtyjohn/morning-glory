@@ -29,35 +29,54 @@ async function configureAuth0() {
     console.log('Auth0 client initialized with:', { domain, clientId: client_id });
 
 
-    // Handle redirect callback
+    // Handle redirect callback only once
     if (window.location.search.includes('code=') && window.location.search.includes('state=')) {
-        await auth0Client.handleRedirectCallback();
-        // Get id_token and send to /set-session
-        const idTokenClaims = await auth0Client.getIdTokenClaims();
-        if (idTokenClaims && idTokenClaims.__raw) {
-            const resp = await fetch('/set-session', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token: idTokenClaims.__raw }),
-                credentials: 'same-origin'
-            });
-            if (resp.status === 403) {
-                // Not authorized: log out from Auth0 and clear cookies
-                if (auth0Client) {
-                    auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
+        if (!sessionStorage.getItem('auth0_callback_handled')) {
+            try {
+                await auth0Client.handleRedirectCallback();
+                sessionStorage.setItem('auth0_callback_handled', '1');
+                // Get id_token and send to /set-session
+                const idTokenClaims = await auth0Client.getIdTokenClaims();
+                if (idTokenClaims && idTokenClaims.__raw) {
+                    const resp = await fetch('/set-session', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ token: idTokenClaims.__raw }),
+                        credentials: 'same-origin'
+                    });
+                    if (resp.status === 403) {
+                        // Not authorized: log out from Auth0 and clear cookies
+                        if (auth0Client) {
+                            auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
+                        }
+                        return;
+                    }
+                    const text = await resp.text();
+                    if (text.trim() === 'Session set') {
+                        window.location.reload();
+                        return;
+                    }
                 }
+                window.history.replaceState({}, document.title, '/');
+                // After setting session, check backend session and update UI
+                await checkBackendSession();
                 return;
+            } catch (e) {
+                console.error('Auth0 handleRedirectCallback error:', e);
+                sessionStorage.removeItem('auth0_callback_handled');
+                // If error is Invalid state, force Auth0 logout and cleanup
+                if (e && e.message && e.message.match(/invalid state/i)) {
+                    if (auth0Client) {
+                        auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
+                    }
+                    return;
+                }
             }
-            const text = await resp.text();
-            if (text.trim() === 'Session set') {
-                window.location.reload();
-                return;
-            }
+        } else {
+            // Already handled, clean up and continue
+            window.history.replaceState({}, document.title, '/');
+            sessionStorage.removeItem('auth0_callback_handled');
         }
-        window.history.replaceState({}, document.title, '/');
-        // After setting session, check backend session and update UI
-        await checkBackendSession();
-        return;
     }
     updateAuthUI();
 // Check backend session and update UI accordingly
