@@ -156,19 +156,7 @@ app.get('/', async (c) => {
   }
   const assetPath = serveUser ? '/user.html' : '/not-logged-in.html';
   console.log(`[ROUTE /] Serving asset: ${assetPath}`);
-  const resp = await c.env.ASSETS.fetch(new Request(url.origin + assetPath, c.req.raw));
-  // Clone headers and remove Location
-  const headers = new Headers(resp.headers);
-  headers.delete('Location');
-  headers.set('Content-Type', 'text/html');
-  return stream(c, async (stream) => {
-    stream.onAbort(() => {
-      console.error('Stream aborted!');
-    });
-    if (resp.body) {
-      await stream.pipe(resp.body);
-    }
-  });
+  return c.env.ASSETS.fetch(new Request(url.origin + assetPath, c.req.raw));
 });
 
 // Endpoint to get sequence:morning from KV for webapp loading
