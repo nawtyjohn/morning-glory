@@ -23,9 +23,13 @@
 
 <body>
         <h2>Bulb Sequence Editor</h2>
-        <div style="margin-bottom:1em; padding:0.5em; background:#f8f8f8; border-radius:6px; border:1px solid #ddd;">
-            <label style="font-weight:bold; margin-right:1em;"><input type="checkbox" id="liveSyncCheckbox"> Live Bulb Sync</label>
-            <button type="button" id="bulbOnBtn" style="margin-right:0.5em;">Turn Bulb On</button>
+        <div style="margin-bottom:1em; padding:0.5em; background:#f8f8f8; border-radius:6px; border:1px solid #ddd; display:flex; align-items:center; gap:0.5em;">
+            <label style="font-weight:bold;"><input type="checkbox" id="liveSyncCheckbox"> Live Bulb Sync</label>
+            <span id="playControls" style="display:none;">
+                <button id="playSequenceBtn" type="button">Play</button>
+                <button id="nextStepBtn" type="button" style="display:none;">Next Step</button>
+            </span>
+            <button type="button" id="bulbOnBtn">Turn Bulb On</button>
             <button type="button" id="bulbOffBtn">Turn Bulb Off</button>
             <span id="bulbStatus" style="margin-left:1em; font-weight:bold;"></span>
         </div>
@@ -58,6 +62,83 @@
     <button onclick="saveSequence()">Save Sequence to KV</button>
     <div id="result"></div>
     <script>
+                        // Show/hide play controls based on Live Bulb Sync
+                        function updatePlayControlsVisibility() {
+                            const playControls = document.getElementById('playControls');
+                            const liveSyncCheckbox = document.getElementById('liveSyncCheckbox');
+                            if (liveSyncCheckbox && playControls) {
+                                playControls.style.display = liveSyncCheckbox.checked ? '' : 'none';
+                            }
+                        }
+                        updatePlayControlsVisibility();
+                        document.getElementById('liveSyncCheckbox').addEventListener('change', updatePlayControlsVisibility);
+                let playingStepIdx = null;
+
+                function highlightStep(idx) {
+                    document.querySelectorAll('#steps > div').forEach((el, i) => {
+                        el.style.background = (i === idx) ? '#ffe066' : '';
+                    });
+                }
+
+                async function playStep(idx) {
+                    if (idx < 0 || idx >= sequence.length) return;
+                    playingStepIdx = idx;
+                    highlightStep(idx);
+                    const step = sequence[idx];
+                    // Only update bulb if live sync is enabled
+                    if (window.liveSyncEnabled) {
+                        if (step.work_mode === 'white') {
+                            await fetch('/bulb/color', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    work_mode: 'white',
+                                    brightness: step.brightness,
+                                    temperature: step.temperature
+                                })
+                            });
+                        } else {
+                            await fetch('/bulb/color', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    hue: step.hue,
+                                    saturation: step.saturation,
+                                    brightness: step.brightness
+                                })
+                            });
+                        }
+                    }
+                }
+
+                function resetPlaySequence() {
+                    playingStepIdx = null;
+                    highlightStep(-1);
+                    document.getElementById('playSequenceBtn').style.display = '';
+                    document.getElementById('nextStepBtn').style.display = 'none';
+                }
+
+                document.getElementById('playSequenceBtn').addEventListener('click', async () => {
+                    if (!sequence.length) return;
+                    await playStep(0);
+                    document.getElementById('playSequenceBtn').style.display = 'none';
+                    document.getElementById('nextStepBtn').style.display = '';
+                });
+                document.getElementById('nextStepBtn').addEventListener('click', async () => {
+                    if (playingStepIdx === null) return;
+                    if (playingStepIdx < sequence.length - 1) {
+                        await playStep(playingStepIdx + 1);
+                    } else {
+                        resetPlaySequence();
+                    }
+                });
+
+                // Unhighlight steps if sequence changes
+                const origRenderSteps = renderSteps;
+                renderSteps = function() {
+                    origRenderSteps();
+                    if (playingStepIdx !== null) highlightStep(playingStepIdx);
+                }
         // Update step times when start time or duration changes
         window.addEventListener('DOMContentLoaded', () => {
             // Only declare liveSyncCheckbox once
@@ -278,15 +359,27 @@
                     console.log('sendLiveColor', idx, sequence[idx], 'liveSyncEnabled:', window.liveSyncEnabled);
                     if (window.liveSyncEnabled) {
                         const step = sequence[idx];
-                        fetch('/bulb/color', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                hue: step.hue,
-                                saturation: step.saturation,
-                                brightness: step.brightness
-                            })
-                        });
+                        if (step.work_mode === 'white') {
+                            fetch('/bulb/color', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    work_mode: 'white',
+                                    brightness: step.brightness,
+                                    temperature: step.temperature
+                                })
+                            });
+                        } else {
+                            fetch('/bulb/color', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    hue: step.hue,
+                                    saturation: step.saturation,
+                                    brightness: step.brightness
+                                })
+                            });
+                        }
                     }
                 }
                 el.oninput = function () {
@@ -349,11 +442,9 @@
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                                hue: step.hue || 0,
-                                saturation: step.saturation || 0,
+                                work_mode: 'white',
                                 brightness: step.brightness,
-                                temperature: step.temperature || 255,
-                                work_mode: 'white'
+                                temperature: step.temperature || 255
                             })
                         });
                     }
@@ -367,11 +458,9 @@
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                                hue: step.hue || 0,
-                                saturation: step.saturation || 0,
+                                work_mode: 'white',
                                 brightness: step.brightness,
-                                temperature: step.temperature || 255,
-                                work_mode: 'white'
+                                temperature: step.temperature || 255
                             })
                         });
                     }
@@ -402,11 +491,9 @@
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                                hue: step.hue || 0,
-                                saturation: step.saturation || 0,
+                                work_mode: 'white',
                                 brightness: step.brightness,
-                                temperature: step.temperature,
-                                work_mode: 'white'
+                                temperature: step.temperature
                             })
                         });
                     }
@@ -420,11 +507,9 @@
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                                hue: step.hue || 0,
-                                saturation: step.saturation || 0,
+                                work_mode: 'white',
                                 brightness: step.brightness,
-                                temperature: step.temperature,
-                                work_mode: 'white'
+                                temperature: step.temperature
                             })
                         });
                     }

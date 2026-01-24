@@ -100,6 +100,7 @@ async function sendCommand(commands: Array<{ code: string; value: any }>, env: E
   const result = await response.json<any>();
   console.log('Tuya API response:', JSON.stringify(result));
   if (!result.success) {
+    console.error('Tuya API command payload on error:', JSON.stringify(commands));
     throw new Error(`Failed to control light: ${result.msg} (code: ${result.code})`);
   }
 }
@@ -129,15 +130,17 @@ app.post('/save-sequence', async (c,) => {
 app.post('/bulb/color', async (c) => {
   const body = await c.req.json();
   if (body.work_mode === 'white') {
-    // White mode: set work_mode, then send bright_value and temp_value
-    const bri100 = Math.round((body.brightness / 255) * 100);
-    const temp100 = Math.round((body.temperature / 255) * 100);
-    await sendCommand([
-      { code: 'work_mode', value: 'white' },
-      { code: 'bright_value', value: bri100 },
-      { code: 'temp_value', value: temp100 }
-    ], c.env);
-    return c.text('Bulb white updated');
+      // White mode: clamp brightness to minimum 25
+      let brightness = body.brightness;
+      if (brightness < 25) brightness = 25;
+      console.log(`[white mode] Requested brightness: ${body.brightness}, sent brightness: ${brightness}`);
+      await sendCommand([
+        { code: 'work_mode', value: 'white' },
+        { code: 'bright_value', value: brightness },
+        { code: 'temp_value', value: body.temperature },
+        { code: 'switch_led', value: true }
+      ], c.env);
+      return c.text('Bulb white updated');
   } else {
     // Colour mode: set work_mode, then send colour_data_v2
     const { hue, saturation, brightness } = body;
