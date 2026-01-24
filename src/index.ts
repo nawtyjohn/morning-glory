@@ -111,6 +111,12 @@ async function sendCommand(commands: Array<{ code: string; value: any }>, env: E
 // Auth0 JWT and "owner" role check. Serve user.html if authorized, public.html otherwise.
 import { jwtVerify } from 'jose';
 
+
+// Block direct access to user.html and public.html
+app.get('/user.html', (c) => c.text('Forbidden', 403));
+app.get('/public.html', (c) => c.text('Forbidden', 403));
+
+// Main entry: serve correct HTML based on Auth0 JWT/role
 app.get('/', async (c) => {
   const url = new URL(c.req.url);
   const authHeader = c.req.header('Authorization');
