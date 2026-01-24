@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { stream } from "hono/streaming";
 import crypto from 'crypto';
 
 declare global {
@@ -120,26 +119,30 @@ app.get('/not-logged-in.html', (c) => c.text('Forbidden', 403));
 // Main entry: serve correct HTML based on Auth0 JWT/role
 app.get('/', async (c) => {
   const url = new URL(c.req.url);
-  const authHeader = c.req.header('Authorization');
   let serveUser = false;
+  // Parse cookies
+  const cookieHeader = c.req.header('Cookie') || '';
+  const cookies = Object.fromEntries(cookieHeader.split(';').map(v => {
+    const idx = v.indexOf('=');
+    if (idx === -1) return [v.trim(), ''];
+    return [v.slice(0, idx).trim(), v.slice(idx + 1).trim()];
+  }));
+  const sessionToken = cookies['session'];
   console.log('[ROUTE /] Incoming request:', {
     url: c.req.url,
-    headers: Object.fromEntries(c.req.raw.headers.entries()),
-    authHeader
+    cookies,
+    sessionToken: sessionToken ? '[present]' : '[absent]'
   });
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
+  if (sessionToken) {
     try {
-      // Use Auth0 JWKS endpoint for signature verification
       const jwksUri = `https://${c.env.AUTH0_DOMAIN}/.well-known/jwks.json`;
       const { createRemoteJWKSet } = await import('jose');
       const JWKS = createRemoteJWKSet(new URL(jwksUri));
-      const { payload } = await jwtVerify(token, JWKS, {
+      const { payload } = await jwtVerify(sessionToken, JWKS, {
         issuer: `https://${c.env.AUTH0_DOMAIN}/`,
         audience: c.env.AUTH0_CLIENT_ID,
       });
       console.log('[ROUTE /] JWT payload:', payload);
-      // Check for owner role in custom claim
       const roles = payload['https://jonbreen.uk/roles'];
       console.log('[ROUTE /] Roles claim:', roles);
       if (Array.isArray(roles) && roles.includes('owner')) {
@@ -149,10 +152,10 @@ app.get('/', async (c) => {
         console.log('[ROUTE /] User is not owner, will serve not-logged-in.html');
       }
     } catch (e) {
-      console.log('[ROUTE /] JWT verification failed or no owner role:', e);
+      console.log('[ROUTE /] Session cookie verification failed or no owner role:', e);
     }
   } else {
-    console.log('[ROUTE /] No valid Authorization header, will serve not-logged-in.html');
+    console.log('[ROUTE /] No session cookie, will serve not-logged-in.html');
   }
   const assetPath = serveUser ? '/user.html' : '/not-logged-in.html';
   console.log(`[ROUTE /] Serving asset: ${assetPath}`);
@@ -221,6 +224,32 @@ app.get('/auth0-config', async (c) => {
     client_id: c.env.AUTH0_CLIENT_ID
   });
 });
+
+
+  // POST /set-session: Accepts id_token, verifies, sets secure session cookie if owner
+  app.post('/set-session', async (c) => {
+    const { token } = await c.req.json();
+    if (!token) return c.text('Missing token', 400);
+
+    try {
+      const jwksUri = `https://${c.env.AUTH0_DOMAIN}/.well-known/jwks.json`;
+      const { createRemoteJWKSet } = await import('jose');
+      const JWKS = createRemoteJWKSet(new URL(jwksUri));
+      const { payload } = await jwtVerify(token, JWKS, {
+        issuer: `https://${c.env.AUTH0_DOMAIN}/`,
+        audience: c.env.AUTH0_CLIENT_ID,
+      });
+      const roles = payload['https://jonbreen.uk/roles'];
+      if (!Array.isArray(roles) || !roles.includes('owner')) {
+        return c.text('Not authorized', 403);
+      }
+      // Set secure, httpOnly session cookie
+      c.header('Set-Cookie', `session=${token}; Path=/; HttpOnly; Secure; SameSite=Lax`);
+      return c.text('Session set');
+    } catch (e) {
+      return c.text('Invalid token', 401);
+    }
+  });
 
 
 export default {

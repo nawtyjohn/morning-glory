@@ -28,9 +28,19 @@ async function configureAuth0() {
     });
     console.log('Auth0 client initialized with:', { domain, clientId: client_id });
 
+
     // Handle redirect callback
     if (window.location.search.includes('code=') && window.location.search.includes('state=')) {
         await auth0Client.handleRedirectCallback();
+        // Get id_token and send to /set-session
+        const idTokenClaims = await auth0Client.getIdTokenClaims();
+        if (idTokenClaims && idTokenClaims.__raw) {
+            await fetch('/set-session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: idTokenClaims.__raw })
+            });
+        }
         window.history.replaceState({}, document.title, '/');
     }
 
@@ -39,16 +49,19 @@ async function configureAuth0() {
 
 async function updateAuthUI() {
     const isAuthenticated = await auth0Client.isAuthenticated();
-    document.getElementById('loginBtn').style.display = isAuthenticated ? 'none' : '';
-    document.getElementById('logoutBtn').style.display = isAuthenticated ? '' : 'none';
+    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const userInfo = document.getElementById('userInfo');
     const appContainer = document.getElementById('app-container');
+    if (loginBtn) loginBtn.style.display = isAuthenticated ? 'none' : '';
+    if (logoutBtn) logoutBtn.style.display = isAuthenticated ? '' : 'none';
     if (isAuthenticated) {
         const user = await auth0Client.getUser();
-        document.getElementById('userInfo').textContent = `Logged in as: ${user.name || user.email}`;
+        if (userInfo) userInfo.textContent = `Logged in as: ${user.name || user.email}`;
         accessToken = await auth0Client.getTokenSilently();
         if (appContainer) appContainer.style.display = '';
     } else {
-        document.getElementById('userInfo').textContent = '';
+        if (userInfo) userInfo.textContent = '';
         accessToken = null;
         if (appContainer) appContainer.style.display = 'none';
     }
@@ -57,9 +70,13 @@ async function updateAuthUI() {
 
 window.addEventListener('DOMContentLoaded', () => {
     const loginBtn = document.getElementById('loginBtn');
+    const loginAltBtn = document.getElementById('login');
     const logoutBtn = document.getElementById('logoutBtn');
     if (loginBtn) {
         loginBtn.onclick = () => auth0Client && auth0Client.loginWithRedirect();
+    }
+    if (loginAltBtn) {
+        loginAltBtn.onclick = () => auth0Client && auth0Client.loginWithRedirect();
     }
     if (logoutBtn) {
         logoutBtn.onclick = () => auth0Client && auth0Client.logout({ logoutParams: { returnTo: window.location.origin } });
