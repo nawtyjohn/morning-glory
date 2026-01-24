@@ -16,8 +16,8 @@
 	"triggers": {
 		"crons": [
 			"* * * * *"
-			]
-		},
+		]
+	},
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
@@ -40,7 +40,11 @@
 	 * Static Assets
 	 * https://developers.cloudflare.com/workers/static-assets/binding/
 	 */
-	"assets": {  "directory": "./public/",  "binding": "ASSETS", "html_handling": "none" },
+	"assets": {
+		"directory": "./public/",
+		"binding": "ASSETS",
+		"html_handling": "none"
+	},
 	/**
 	 * Service Bindings (communicate between multiple Workers)
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
@@ -49,7 +53,7 @@
 	"kv_namespaces": [
 		{
 			"binding": "KV",
-			"id": "morningglory",
+			"id": "6b5facd80ef34219b6165136b6d0bcaa",
 			"preview_id": "8f7b898548d24460b40ca9f6648e0da0done"
 		}
 	]
