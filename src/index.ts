@@ -110,7 +110,7 @@ async function sendCommand(commands: Array<{ code: string; value: any }>, env: E
   });
 
   const result = await response.json<any>();
-  //console.log('Tuya API response:', JSON.stringify(result));
+  console.log('Tuya API response:', JSON.stringify(result));
   if (!result.success) {
     console.error('Tuya API command payload on error:', JSON.stringify(commands));
     throw new Error(`Failed to control light: ${result.msg} (code: ${result.code})`);
@@ -222,32 +222,58 @@ app.delete('/delete-sequence/:name', sessionHandler, async (c) => {
 app.post('/bulb/color', sessionHandler, async (c) => {
   const body = await c.req.json();
   if (body.work_mode === 'scene') {
-    // Scene mode - flash_scene codes expect HSV color object as value
+    // Scene mode - get scene data from device status and send it
     if (body.sceneId) {
       console.log(`[scene mode] Activating scene: ${body.sceneId}`);
-      // Flash scenes take an HSV object: { h: hue, s: saturation, v: brightness }
-      // Default to blue (h=240) if not provided
-      const sceneValue = body.sceneValue || { h: 240, s: 255, v: 255 };
       
+      // Get device status to retrieve the scene configuration
       try {
-        // First ensure bulb is on and in colour mode, then activate scene
-        await sendCommand([
-          { code: 'switch_led', value: true },
-          { code: 'work_mode', value: 'colour' }
-        ], c.env);
-        console.log('[scene mode] Set bulb to colour mode');
+        const accessToken = await getAccessToken(c.env);
+        const statusPath = `/v1.0/devices/${c.env.TUYA_DEVICE_ID}/status`;
+        const signHeaders = signTuyaRequest('GET', statusPath, '', c.env.TUYA_ACCESS_KEY, c.env.TUYA_SECRET_KEY, accessToken);
         
-        // Now send the flash scene command
+        const statusResponse = await fetch(`${c.env.TUYA_BASE_URL}${statusPath}`, {
+          method: 'GET',
+          headers: {
+            ...signHeaders,
+            'access_token': accessToken,
+            'signVersion': '2.0',
+          },
+        });
+        
+        const statusResult = await statusResponse.json<any>();
+        if (!statusResult.success || !statusResult.result) {
+          throw new Error('Failed to get device status');
+        }
+        
+        // Find the scene data for this scene ID
+        const deviceStatus = statusResult.result;
+        let sceneData = null;
+        
+        for (const item of deviceStatus) {
+          if (item.code === body.sceneId) {
+            sceneData = item.value;
+            break;
+          }
+        }
+        
+        if (!sceneData) {
+          return c.json({ error: `Scene ${body.sceneId} not found in device status` }, 400);
+        }
+        
+        console.log(`[scene mode] Found scene data: ${sceneData}`);
+        
+        // Try sending with work_mode: "scene" first, then scene_data
         const commands = [
-          { code: body.sceneId, value: sceneValue }
+          { code: 'work_mode', value: 'scene' },
+          { code: 'scene_data', value: sceneData }
         ];
-        console.log(`[scene mode] Sending flash commands:`, JSON.stringify(commands));
+        console.log(`[scene mode] Sending commands:`, JSON.stringify(commands));
         await sendCommand(commands, c.env);
-        console.log('[scene mode] Flash scene activated successfully');
         return c.text('Bulb scene activated');
       } catch (error) {
         console.error('[scene mode] Error:', error);
-        throw error;
+        return c.json({ error: 'Failed to activate scene' }, 500);
       }
     } else {
       return c.json({ error: 'Must provide sceneId for scene mode' }, 400);
