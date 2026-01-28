@@ -119,20 +119,22 @@ let currentColorStep = null;
 let whiteSliderStep = null;
 
 // Load list of sequences and populate dropdown
-async function loadSequenceList() {
+async function loadSequenceList(skipLoadingSequence = false) {
     try {
         const res = await fetch('/list-sequences');
         const sequences = await res.json();
         const selector = document.getElementById('sequenceSelector');
+        const editorUI = document.getElementById('editorUI');
         if (!selector) return;
         
         selector.innerHTML = '';
         if (sequences.length === 0) {
             const opt = document.createElement('option');
-            opt.value = 'morning';
-            opt.textContent = 'morning (new)';
+            opt.value = '';
+            opt.textContent = '-- Create a new sequence --';
             selector.appendChild(opt);
-            window.currentSequenceName = 'morning';
+            window.currentSequenceName = null;
+            if (editorUI) editorUI.style.display = 'none';
         } else {
             sequences.forEach(seq => {
                 const opt = document.createElement('option');
@@ -140,15 +142,28 @@ async function loadSequenceList() {
                 opt.textContent = `${seq.name} (${seq.stepCount} steps${seq.enabled ? ', enabled' : ''})`;
                 selector.appendChild(opt);
             });
-            window.currentSequenceName = sequences[0].name;
-            selector.value = window.currentSequenceName;
+            // If not skipping and no current sequence, load first one
+            if (!skipLoadingSequence && !window.currentSequenceName) {
+                window.currentSequenceName = sequences[0].name;
+                selector.value = window.currentSequenceName;
+                if (editorUI) editorUI.style.display = 'block';
+                await loadSequence(window.currentSequenceName);
+            } else if (!skipLoadingSequence && window.currentSequenceName) {
+                // Set selector to current sequence if it exists in the list
+                const exists = sequences.find(s => s.name === window.currentSequenceName);
+                if (exists) {
+                    selector.value = window.currentSequenceName;
+                    // Reload the current sequence to make sure it's displayed
+                    await loadSequence(window.currentSequenceName);
+                }
+            }
         }
-        
-        await loadSequence(window.currentSequenceName);
     } catch (e) {
         console.error('Error loading sequence list:', e);
-        window.currentSequenceName = 'morning';
+        window.currentSequenceName = null;
         window.sequence = [];
+        const editorUI = document.getElementById('editorUI');
+        if (editorUI) editorUI.style.display = 'none';
         renderSteps();
     }
 }
@@ -159,6 +174,7 @@ async function loadSequence(name) {
         const res = await fetch(`/get-sequence/${name}`);
         const data = await res.json();
         window.currentSequenceName = name;
+        const editorUI = document.getElementById('editorUI');
         
         if (data && Array.isArray(data.steps)) {
             window.sequence = data.steps;
@@ -175,15 +191,19 @@ async function loadSequence(name) {
             // Update enabled checkbox
             const enabledCheckbox = document.getElementById('sequenceEnabledCheckbox');
             if (enabledCheckbox) enabledCheckbox.checked = data.enabled ?? false;
+            if (editorUI) editorUI.style.display = 'block';
         } else {
             window.sequence = [];
             const enabledCheckbox = document.getElementById('sequenceEnabledCheckbox');
             if (enabledCheckbox) enabledCheckbox.checked = false;
+            if (editorUI) editorUI.style.display = 'block';
         }
         renderSteps();
     } catch (e) {
         console.error('Error loading sequence:', e);
         window.sequence = [];
+        const editorUI = document.getElementById('editorUI');
+        if (editorUI) editorUI.style.display = 'none';
         renderSteps();
     }
 }
@@ -200,7 +220,16 @@ function setupSequenceControls() {
     const selector = document.getElementById('sequenceSelector');
     if (selector) {
         selector.addEventListener('change', async function() {
-            await loadSequence(this.value);
+            const editorUI = document.getElementById('editorUI');
+            if (!this.value) {
+                // No sequence selected
+                if (editorUI) editorUI.style.display = 'none';
+                window.currentSequenceName = null;
+                window.sequence = [];
+            } else {
+                if (editorUI) editorUI.style.display = 'block';
+                await loadSequence(this.value);
+            }
         });
     }
     
@@ -219,8 +248,10 @@ function setupSequenceControls() {
             if (durationInput) durationInput.value = '60';
             const enabledCheckbox = document.getElementById('sequenceEnabledCheckbox');
             if (enabledCheckbox) enabledCheckbox.checked = false;
+            const editorUI = document.getElementById('editorUI');
+            if (editorUI) editorUI.style.display = 'block';
             renderSteps();
-            await loadSequenceList();
+            await loadSequenceList(true);
             // Select the new sequence
             if (selector) selector.value = name;
         });
@@ -233,6 +264,7 @@ function setupSequenceControls() {
             if (!confirm(`Delete sequence "${window.currentSequenceName}"?`)) return;
             try {
                 await fetch(`/delete-sequence/${window.currentSequenceName}`, { method: 'DELETE' });
+                window.currentSequenceName = null; // Reset so next sequence will be loaded
                 await loadSequenceList();
             } catch (e) {
                 alert('Error deleting sequence: ' + e.message);

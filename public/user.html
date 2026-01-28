@@ -54,34 +54,36 @@
             <button type="button" id="bulbOffBtn">Turn Bulb Off</button>
             <span id="bulbStatus" style="margin-left:1em; font-weight:bold;"></span>
         </div>
-        <button id="toggleJsonBtn" type="button" onclick="toggleJson()">Show Advanced JSON Editor</button>
-        <div id="jsonEditor" style="display:none; margin-top:1em;">
-            <form id="seqForm">
-                <label>Paste Sequence JSON:<br>
-                    <textarea id="seqJson" rows="8" cols="60"></textarea>
-                </label><br><br>
-                <button type="button" onclick="parseSequence()">Parse & Visualize</button>
-            </form>
-        </div>
-        <div id="manualEntry">
-            <h3>Manual Entry</h3>
-            <button type="button" onclick="addStep()">Add Step</button>
-            <div id="steps"></div>
-        </div>
-        <div id="colorPickerModal"
-            style="display:none; position:fixed; top:10%; left:50%; transform:translateX(-50%); background:#fff; border:1px solid #ccc; padding:20px; z-index:1000;">
-            <div id="colorPicker"></div>
-            <div style="margin-top:1em;">
-                <button id="applyColorBtn">Apply</button>
-                <button id="cancelColorBtn">Cancel</button>
+        <div id="editorUI" style="display:none;">
+            <button id="toggleJsonBtn" type="button" onclick="toggleJson()">Show Advanced JSON Editor</button>
+            <div id="jsonEditor" style="display:none; margin-top:1em;">
+                <form id="seqForm">
+                    <label>Paste Sequence JSON:<br>
+                        <textarea id="seqJson" rows="8" cols="60"></textarea>
+                    </label><br><br>
+                    <button type="button" onclick="parseSequence()">Parse & Visualize</button>
+                </form>
             </div>
+            <div id="manualEntry">
+                <h3>Manual Entry</h3>
+                <button type="button" onclick="addStep()">Add Step</button>
+                <div id="steps"></div>
+            </div>
+            <div id="colorPickerModal"
+                style="display:none; position:fixed; top:10%; left:50%; transform:translateX(-50%); background:#fff; border:1px solid #ccc; padding:20px; z-index:1000;">
+                <div id="colorPicker"></div>
+                <div style="margin-top:1em;">
+                    <button id="applyColorBtn">Apply</button>
+                    <button id="cancelColorBtn">Cancel</button>
+                </div>
+            </div>
+            <hr>
+            <label>Start Time: <input type="time" id="startTime"></label>
+            <label>Duration (minutes): <input type="number" id="duration" min="1" value="60"></label>
+            <br><br>
+            <button onclick="saveSequence()">Save Sequence to KV</button>
+            <div id="result"></div>
         </div>
-        <hr>
-        <label>Start Time: <input type="time" id="startTime"></label>
-        <label>Duration (minutes): <input type="number" id="duration" min="1" value="60"></label>
-        <br><br>
-        <button onclick="saveSequence()">Save Sequence to KV</button>
-        <div id="result"></div>
     </div>
 </body>
 </html>

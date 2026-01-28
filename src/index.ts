@@ -357,17 +357,29 @@ export default {
         commands = [
           { code: 'work_mode', value: 'white' },
           { code: 'bright_value', value: step.brightness },
-          { code: 'temp_value', value: step.temperature },
-          { code: 'switch_led', value: step.on }
+          { code: 'temp_value', value: step.temperature }
         ];
+        // Include switch_led for first step (always), or for subsequent steps only if turning off
+        if (stepIdx === 0 || step.on === false) {
+          commands.push({ code: 'switch_led', value: step.on });
+        }
       } else if (step.work_mode === 'colour') {
         commands = [
           { code: 'work_mode', value: 'colour' },
-          { code: 'colour_data', value: { h: step.hue, s: step.saturation, v: step.brightness } },
-          { code: 'switch_led', value: step.on }
+          { code: 'colour_data', value: { h: step.hue, s: step.saturation, v: step.brightness } }
         ];
+        // Include switch_led for first step (always), or for subsequent steps only if turning off
+        if (stepIdx === 0 || step.on === false) {
+          commands.push({ code: 'switch_led', value: step.on });
+        }
       } else {
-        commands = [{ code: 'switch_led', value: step.on }];
+        // No color/white mode specified - only control power on first step or if turning off
+        if (stepIdx === 0 || step.on === false) {
+          commands = [{ code: 'switch_led', value: step.on }];
+        } else {
+          // Skip this step if no work_mode and not first step and not turning off
+          continue;
+        }
       }
       try {
         await sendCommand(commands, env);

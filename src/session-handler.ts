@@ -1,8 +1,8 @@
-// Returns { loggedIn: true, user: { ... } } if session is valid and user is owner, else { loggedIn: false }
+// Middleware that validates session and continues if authenticated
 import { Hono } from 'hono';
 import { jwtVerify } from 'jose';
 
-export default async function sessionHandler(c) {
+export default async function sessionHandler(c, next) {
   const cookieHeader = c.req.header('Cookie') || '';
   const cookies = Object.fromEntries(cookieHeader.split(';').map(v => {
     const idx = v.indexOf('=');
@@ -10,7 +10,7 @@ export default async function sessionHandler(c) {
     return [v.slice(0, idx).trim(), v.slice(idx + 1).trim()];
   }));
   const sessionToken = cookies['session'];
-  if (!sessionToken) return c.json({ loggedIn: false });
+  if (!sessionToken) return c.json({ loggedIn: false, error: 'No session' }, 401);
   try {
     const jwksUri = `https://${c.env.AUTH0_DOMAIN}/.well-known/jwks.json`;
     const { createRemoteJWKSet } = await import('jose');
@@ -21,10 +21,11 @@ export default async function sessionHandler(c) {
     });
     const roles = payload['https://jonbreen.uk/roles'];
     if (Array.isArray(roles) && roles.includes('owner')) {
-      return c.json({ loggedIn: true, user: payload });
+      // Authenticated - continue to next handler
+      return await next();
     }
-    return c.json({ loggedIn: false });
+    return c.json({ loggedIn: false, error: 'Not owner' }, 403);
   } catch (e) {
-    return c.json({ loggedIn: false });
+    return c.json({ loggedIn: false, error: 'Invalid session' }, 401);
   }
 }
