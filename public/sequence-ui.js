@@ -26,6 +26,7 @@ async function setBulbOn(on) {
 window.addEventListener('DOMContentLoaded', () => {
     const liveSyncCheckbox = document.getElementById('liveSyncCheckbox');
     if (liveSyncCheckbox) {
+        window.liveSyncEnabled = liveSyncCheckbox.checked;
         liveSyncCheckbox.addEventListener('change', function() {
             window.liveSyncEnabled = this.checked;
         });
@@ -302,6 +303,18 @@ function renderSteps() {
         el.oninput = function () {
             window.sequence[idx].brightness = Number(this.value);
             if (preview && tempEl) preview.style.background = tempToRGB(Number(tempEl.value), Number(this.value));
+            if (window.liveSyncEnabled) {
+                const step = window.sequence[idx];
+                fetch('/bulb/color', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        work_mode: 'white',
+                        brightness: step.brightness,
+                        temperature: step.temperature
+                    })
+                });
+            }
         };
         el.onchange = function () {
             renderSteps();
@@ -325,6 +338,18 @@ function renderSteps() {
         el.oninput = function () {
             window.sequence[idx].temperature = Number(this.value);
             if (preview && brightEl) preview.style.background = tempToRGB(Number(this.value), Number(brightEl.value));
+            if (window.liveSyncEnabled) {
+                const step = window.sequence[idx];
+                fetch('/bulb/color', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        work_mode: 'white',
+                        brightness: step.brightness,
+                        temperature: step.temperature
+                    })
+                });
+            }
         };
         el.onchange = function () {
             renderSteps();
@@ -347,8 +372,20 @@ function openColorPicker(i) {
     const step = window.sequence[i];
     document.getElementById('colorPickerModal').style.display = 'block';
     window._originalColor = { h: step.hue, s: step.saturation, v: step.brightness };
-    function updateLivePreview() {
+    async function updateLivePreview() {
         renderSteps();
+        if (window.liveSyncEnabled && window.iroPicker) {
+            const color = window.iroPicker.color;
+            await fetch('/bulb/color', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    hue: color.hue,
+                    saturation: Math.round(color.saturation * 2.55),
+                    brightness: Math.round(color.value * 2.55)
+                })
+            });
+        }
     }
     function setupPicker() {
         const h = step.hue || 0;
@@ -383,7 +420,7 @@ function openColorPicker(i) {
         setupPicker();
     }
     setTimeout(() => {
-        document.getElementById('applyColorBtn').onclick = function (e) {
+        document.getElementById('applyColorBtn').onclick = async function (e) {
             e.preventDefault();
             if (currentColorStep !== null) {
                 const color = window.iroPicker.color;
@@ -391,15 +428,39 @@ function openColorPicker(i) {
                 window.sequence[currentColorStep].saturation = Math.round(color.saturation * 2.55);
                 window.sequence[currentColorStep].brightness = Math.round(color.value * 2.55);
                 renderSteps();
+                // Return bulb to original color
+                if (window.liveSyncEnabled && window._originalColor) {
+                    await fetch('/bulb/color', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            hue: window._originalColor.h,
+                            saturation: window._originalColor.s,
+                            brightness: window._originalColor.v
+                        })
+                    });
+                }
             }
             closeColorPicker();
         };
-        document.getElementById('cancelColorBtn').onclick = function (e) {
+        document.getElementById('cancelColorBtn').onclick = async function (e) {
             e.preventDefault();
             if (currentColorStep !== null && window._originalColor) {
                 window.sequence[currentColorStep].hue = window._originalColor.h;
                 window.sequence[currentColorStep].saturation = window._originalColor.s;
                 window.sequence[currentColorStep].brightness = window._originalColor.v;
+                // Return bulb to original color
+                if (window.liveSyncEnabled) {
+                    await fetch('/bulb/color', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            hue: window._originalColor.h,
+                            saturation: window._originalColor.s,
+                            brightness: window._originalColor.v
+                        })
+                    });
+                }
             }
             closeColorPicker();
             renderSteps();
