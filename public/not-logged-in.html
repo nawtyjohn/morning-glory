@@ -5,14 +5,29 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Not Logged In</title>
-  <link rel="stylesheet" href="style.css">
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+      tailwind.config = {
+          darkMode: 'media'
+      }
+  </script>
   <!-- Auth0 SPA SDK (CDN) -->
   <script src="https://cdn.auth0.com/js/auth0-spa-js/2.11/auth0-spa-js.production.js" defer></script>
 </head>
-<body>
-  <h1>Welcome</h1>
-  <p>You must be logged in as an owner to access this app.</p>
-  <button id="login">Log In</button>
+<body class="bg-gray-50 dark:bg-gray-900 min-h-screen flex items-center justify-center">
+  <div class="max-w-md w-full mx-auto p-8">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 text-center">
+      <div class="mb-6">
+        <svg class="mx-auto h-16 w-16 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+        </svg>
+      </div>
+      <h1 class="text-3xl font-bold text-gray-800 dark:text-white mb-4">Welcome</h1>
+      <p class="text-gray-600 dark:text-gray-300 mb-6">You must be logged in as an owner to access this app.</p>
+      <button id="login" class="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium text-lg shadow-md hover:shadow-lg">Log In</button>
+    </div>
+  </div>
   <script src="auth0-init.js"></script>
   <script src="auth0-owner-check.js"></script>
 </body>

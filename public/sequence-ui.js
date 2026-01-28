@@ -251,9 +251,14 @@ function setupSequenceControls() {
             const editorUI = document.getElementById('editorUI');
             if (editorUI) editorUI.style.display = 'block';
             renderSteps();
-            await loadSequenceList(true);
-            // Select the new sequence
-            if (selector) selector.value = name;
+            // Add to dropdown temporarily
+            if (selector) {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = `${name} (0 steps)`;
+                selector.appendChild(opt);
+                selector.value = name;
+            }
         });
     }
     
@@ -276,19 +281,9 @@ function setupSequenceControls() {
     const enabledCheckbox = document.getElementById('sequenceEnabledCheckbox');
     if (enabledCheckbox) {
         enabledCheckbox.addEventListener('change', async function() {
-            try {
-                await fetch('/update-sequence-status', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        name: window.currentSequenceName,
-                        enabled: this.checked
-                    })
-                });
-                await loadSequenceList();
-            } catch (e) {
-                console.error('Error updating sequence status:', e);
-            }
+            // Enabled status is saved with the sequence when user clicks Save
+            // No immediate backend call needed - just update the UI state
+            console.log('Enabled status will be saved when sequence is saved');
         });
     }
 }
@@ -365,8 +360,8 @@ function renderSteps() {
                 color = hsvToRgb(step.hue, step.saturation, step.brightness);
             }
         }
-        let html = '<div data-index="' + i + '">';
-        html += '<span style="font-size:0.95em; color:#555; margin-right:8px; min-width:56px; display:inline-block;">' + stepTimes[i] + '</span>';
+        let html = '<div data-index="' + i + '" class="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition">';
+        html += '<span class="text-sm text-gray-600 dark:text-gray-400 font-mono min-w-[60px]">' + stepTimes[i] + '</span>';
         
         // Color/White preview first (before mode dropdown)
         if (step.work_mode === 'colour') {
@@ -375,7 +370,7 @@ function renderSteps() {
                 const c = window.iroPicker.color;
                 previewColor = c.hexString;
             }
-            html += '<span class="color-preview" style="background:' + previewColor + '; cursor:pointer; margin-right:8px;" onclick="openColorPicker(' + i + ')"></span>';
+            html += '<span class="color-preview cursor-pointer" style="background:' + previewColor + ';" onclick="openColorPicker(' + i + ')"></span>';
         } else if (step.work_mode === 'white') {
             let bright = typeof step.brightness === 'number' ? step.brightness : 255;
             let temp = typeof step.temperature === 'number' ? step.temperature : 255;
@@ -391,11 +386,11 @@ function renderSteps() {
                 return `rgb(${r},${g},${b})`;
             }
             let white = tempToRGB(temp, bright);
-            html += '<span class="color-preview" style="background:' + white + '; margin-right:8px; border:2px solid #888; cursor:pointer;" title="Click to edit with sliders" onclick="showWhiteSliders(' + i + ')"></span>';
+            html += '<span class="color-preview cursor-pointer" style="background:' + white + ';" title="Click to edit with sliders" onclick="showWhiteSliders(' + i + ')"></span>';
         }
         
         // Mode dropdown (without "Mode:" prefix)
-        html += '<select class="mode-select" data-index="' + i + '">';
+        html += '<select class="mode-select px-3 py-1.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent" data-index="' + i + '">';
         html += '<option value="colour"' + (step.work_mode === 'colour' ? ' selected' : '') + '>Colour</option>';
         html += '<option value="white"' + (step.work_mode === 'white' ? ' selected' : '') + '>White</option>';
         html += '<option value="scene"' + (step.work_mode === 'scene' ? ' selected' : '') + '>Scene</option>';
@@ -404,43 +399,52 @@ function renderSteps() {
         // Mode-specific UI (sliders/scene selector)
         if (step.work_mode === 'white') {
             if (whiteSliderStep == i) {
-                html += '<div style="display:inline-block; margin-left:10px; vertical-align:middle;">';
-                html += '<label>Brightness: <input type="range" min="0" max="255" class="bright-slider" data-index="' + i + '" value="' + (typeof step.brightness === 'number' ? step.brightness : 255) + '"></label>';
-                html += '<label style="margin-left:8px;">Temperature: <input type="range" min="0" max="255" class="temp-slider" data-index="' + i + '" value="' + (typeof step.temperature === 'number' ? step.temperature : 255) + '"></label>';
+                html += '<div class="flex items-center gap-3 ml-2">';
+                html += '<label class="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300">Brightness: <input type="range" min="0" max="255" class="bright-slider w-32" data-index="' + i + '" value="' + (typeof step.brightness === 'number' ? step.brightness : 255) + '"></label>';
+                html += '<label class="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300">Temperature: <input type="range" min="0" max="255" class="temp-slider w-32" data-index="' + i + '" value="' + (typeof step.temperature === 'number' ? step.temperature : 255) + '"></label>';
                 html += '</div>';
             }
         } else if (step.work_mode === 'scene') {
             let sceneId = step.sceneId || '';
-            html += ' Scene: <select class="scene-select" data-index="' + i + '">';
+            let sceneHue = step.sceneHue || 240;
+            html += '<select class="scene-select px-3 py-1.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent ml-2" data-index="' + i + '" title="Flash scenes with color effect">';
             html += '<option value="">-- Select Scene --</option>';
-            // Populate with available scenes if they exist
+            // Add flash_scene options
             if (window.availableScenes && Array.isArray(window.availableScenes)) {
                 window.availableScenes.forEach(scene => {
-                    // Adjust based on actual data structure from Tuya
-                    const id = scene.code || scene.id || scene.scene_id || '';
-                    const name = scene.name || scene.code || id;
-                    html += '<option value="' + id + '"' + (sceneId === id ? ' selected' : '') + '>' + name + '</option>';
+                    if (scene.code && scene.code.startsWith('flash_scene_')) {
+                        const name = scene.code.replace('flash_scene_', 'Flash Scene ');
+                        html += '<option value="' + scene.code + '"' + (sceneId === scene.code ? ' selected' : '') + '>' + name + '</option>';
+                    }
                 });
             }
             html += '</select>';
+            html += ' <label class="text-sm text-gray-700 dark:text-gray-300 ml-2">Color: <input type="number" min="0" max="360" class="scene-hue-input w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white rounded" data-index="' + i + '" value="' + sceneHue + '" title="Hue (0-360)"></label>';
         }
         window.showWhiteSliders = function (i) {
             whiteSliderStep = Number(i);
             currentColorStep = null;
             renderSteps();
         }
-        html += ' On: <input type="checkbox" class="on-checkbox" data-index="' + i + '"' + (step.on ? ' checked' : '') + '>';
-        html += ' <button class="del-btn" data-index="' + i + '">Delete</button>';
+        html += '<label class="flex items-center gap-1 ml-auto"><input type="checkbox" class="on-checkbox w-4 h-4 text-blue-600 rounded" data-index="' + i + '"' + (step.on ? ' checked' : '') + '> <span class="text-sm text-gray-700 dark:text-gray-300">On</span></label>';
+        html += '<button class="del-btn px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm rounded-md transition" data-index="' + i + '">Delete</button>';
         html += '</div>';
         stepsDiv.innerHTML += html;
     });
     // Add event listeners (event delegation)
     stepsDiv.querySelectorAll('.mode-select').forEach(el => {
         el.onchange = function () {
-            updateStep(this.dataset.index, 'work_mode', this.value);
-            whiteSliderStep = null;
-            // Close color picker if it's open
-            closeColorPicker();
+            const idx = this.dataset.index;
+            updateStep(idx, 'work_mode', this.value);
+            // If switching to white mode, show sliders
+            if (this.value === 'white') {
+                whiteSliderStep = Number(idx);
+                renderSteps();
+            } else {
+                whiteSliderStep = null;
+                // Close color picker if it's open
+                closeColorPicker();
+            }
         };
     });
     stepsDiv.querySelectorAll('.hue-input').forEach(el => {
@@ -544,7 +548,28 @@ function renderSteps() {
         el.onchange = function () { updateStep(this.dataset.index, 'on', this.checked); };
     });
     stepsDiv.querySelectorAll('.scene-select').forEach(el => {
-        el.onchange = function () { updateStep(this.dataset.index, 'sceneId', this.value); };
+        el.onchange = function () {
+            const idx = this.dataset.index;
+            updateStep(idx, 'sceneId', this.value);
+            // Live sync
+            if (window.liveSyncEnabled && this.value) {
+                const hue = parseInt(document.querySelector(`.scene-hue-input[data-index="${idx}"]`)?.value || '240');
+                fetch('/bulb/color', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        work_mode: 'scene',
+                        sceneId: this.value,
+                        sceneValue: { h: hue, s: 255, v: 255 }
+                    })
+                });
+            }
+        };
+    });
+    stepsDiv.querySelectorAll('.scene-hue-input').forEach(el => {
+        el.onchange = function () {
+            updateStep(this.dataset.index, 'sceneHue', this.value);
+        };
     });
     stepsDiv.querySelectorAll('.del-btn').forEach(el => {
         el.onclick = function () { removeStep(this.dataset.index); };
@@ -660,7 +685,9 @@ function closeColorPicker() {
 
 function updateStep(i, key, value, skipRender) {
     if (key === 'on') value = value ? true : false;
-    else value = key === 'work_mode' ? value : Number(value);
+    else if (key === 'work_mode' || key === 'sceneId') value = value; // Keep as string
+    else if (key === 'sceneNum') value = value === null ? null : (typeof value === 'number' ? value : parseInt(value)); // Parse as number or null
+    else value = Number(value);
     window.sequence[i][key] = value;
     if (!skipRender) renderSteps();
 }

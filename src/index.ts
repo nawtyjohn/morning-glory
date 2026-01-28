@@ -218,31 +218,40 @@ app.delete('/delete-sequence/:name', sessionHandler, async (c) => {
   return c.json({ success: true });
 });
 
-// Update sequence enabled status
-app.post('/update-sequence-status', sessionHandler, async (c) => {
-  const { name, enabled } = await c.req.json();
-  const key = `sequence:${name}`;
-  const seq = await c.env.KV.get(key, 'json') as any;
-  if (!seq) {
-    return c.json({ success: false, error: 'Sequence not found' }, 404);
-  }
-  seq.enabled = enabled;
-  await c.env.KV.put(key, JSON.stringify(seq));
-  return c.json({ success: true });
-});
-
-// POST /bulb/color { hue, saturation, brightness } or { work_mode: 'scene', sceneId }
+// POST /bulb/color { hue, saturation, brightness } or { work_mode: 'scene', sceneNum/sceneId }
 app.post('/bulb/color', sessionHandler, async (c) => {
   const body = await c.req.json();
   if (body.work_mode === 'scene') {
-    // Scene mode
-    const sceneId = body.sceneId || '';
-    await sendCommand([
-      { code: 'work_mode', value: 'scene' },
-      { code: 'scene_id', value: sceneId },
-      { code: 'switch_led', value: true }
-    ], c.env);
-    return c.text('Bulb scene updated');
+    // Scene mode - flash_scene codes expect HSV color object as value
+    if (body.sceneId) {
+      console.log(`[scene mode] Activating scene: ${body.sceneId}`);
+      // Flash scenes take an HSV object: { h: hue, s: saturation, v: brightness }
+      // Default to blue (h=240) if not provided
+      const sceneValue = body.sceneValue || { h: 240, s: 255, v: 255 };
+      
+      try {
+        // First ensure bulb is on and in colour mode, then activate scene
+        await sendCommand([
+          { code: 'switch_led', value: true },
+          { code: 'work_mode', value: 'colour' }
+        ], c.env);
+        console.log('[scene mode] Set bulb to colour mode');
+        
+        // Now send the flash scene command
+        const commands = [
+          { code: body.sceneId, value: sceneValue }
+        ];
+        console.log(`[scene mode] Sending flash commands:`, JSON.stringify(commands));
+        await sendCommand(commands, c.env);
+        console.log('[scene mode] Flash scene activated successfully');
+        return c.text('Bulb scene activated');
+      } catch (error) {
+        console.error('[scene mode] Error:', error);
+        throw error;
+      }
+    } else {
+      return c.json({ error: 'Must provide sceneId for scene mode' }, 400);
+    }
   } else if (body.work_mode === 'white') {
       // White mode: clamp brightness to minimum 25
       let brightness = body.brightness;
@@ -394,10 +403,15 @@ export default {
       // Build and send command
       let commands;
       if (step.work_mode === 'scene') {
-        commands = [
-          { code: 'work_mode', value: 'scene' },
-          { code: 'scene_id', value: step.sceneId || '' }
-        ];
+        // For scenes, use scene ID codes like flash_scene_1
+        if (step.sceneId) {
+          commands = [
+            { code: step.sceneId, value: true }
+          ];
+        } else {
+          console.error(`Scene step missing sceneId`);
+          continue;
+        }
         // Include switch_led for first step (always), or for subsequent steps only if turning off
         if (stepIdx === 0 || step.on === false) {
           commands.push({ code: 'switch_led', value: step.on });

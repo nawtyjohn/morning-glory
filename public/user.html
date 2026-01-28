@@ -3,19 +3,23 @@
 <head>
     <!-- Auth0 SPA SDK (CDN) -->
     <script src="https://cdn.auth0.com/js/auth0-spa-js/2.11/auth0-spa-js.production.js" defer></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'media'
+        }
+    </script>
     <title>Bulb Sequence Editor</title>
     <style>
-        body {
-            font-family: sans-serif;
-            margin: 2em;
-        }
         .color-preview {
             width: 40px;
             height: 40px;
             display: inline-block;
-            border: 1px solid #ccc;
-            margin-right: 8px;
+            border: 2px solid #e5e7eb;
+            border-radius: 0.375rem;
             vertical-align: middle;
+            box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
         }
     </style>
     <script src="/iro.min.js"></script>
@@ -25,64 +29,91 @@
     <script src="/auth0-init.js" defer></script>
     <script src="/auth0-owner-check.js" defer></script>
 </head>
-<body>
-    <div id="auth0-controls" style="margin-bottom:1em;">
-        <button id="loginBtn" style="display:none;">Log In</button>
-        <button id="logoutBtn">Log Out</button>
-        <span id="userInfo" style="margin-left:1em;"></span>
-    </div>
-    <div id="app-container">
-        <h2>Bulb Sequence Editor</h2>
-        <div style="margin-bottom:1em; padding:0.75em; background:#f0f0f0; border-radius:6px; border:1px solid #ccc;">
-            <div style="display:flex; align-items:center; gap:1em; margin-bottom:0.5em;">
-                <label style="font-weight:bold;">Sequence:
-                    <select id="sequenceSelector" style="padding:0.3em; font-size:1em;"></select>
+<body class="bg-gray-50 dark:bg-gray-900 min-h-screen">
+    <div class="max-w-5xl mx-auto p-6">
+        <!-- Auth Controls -->
+        <div class="flex items-center justify-between mb-6 p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Bulb Sequence Editor</h1>
+            <div id="auth0-controls" class="flex items-center gap-3">
+                <button id="loginBtn" class="hidden px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Log In</button>
+                <button id="logoutBtn" class="px-4 py-2 bg-gray-600 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-700 dark:hover:bg-gray-600 transition">Log Out</button>
+                <span id="userInfo" class="text-gray-700 dark:text-gray-300 font-medium"></span>
+            </div>
+        </div>
+
+        <!-- Sequence Selector -->
+        <div class="mb-6 p-5 bg-white dark:bg-gray-800 rounded-lg shadow">
+            <div class="flex items-center gap-4 flex-wrap">
+                <label class="font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    <span>Sequence:</span>
+                    <select id="sequenceSelector" class="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"></select>
                 </label>
-                <button type="button" id="newSequenceBtn">New Sequence</button>
-                <button type="button" id="deleteSequenceBtn" style="background:#e74c3c; color:white;">Delete</button>
-                <label style="margin-left:auto;">
-                    <input type="checkbox" id="sequenceEnabledCheckbox">
-                    <strong>Enabled (for cron)</strong>
+                <button type="button" id="newSequenceBtn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">New Sequence</button>
+                <button type="button" id="deleteSequenceBtn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">Delete</button>
+                <label class="ml-auto flex items-center gap-2 font-medium text-gray-700 dark:text-gray-300">
+                    <input type="checkbox" id="sequenceEnabledCheckbox" class="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500">
+                    <span>Enabled (for cron)</span>
                 </label>
             </div>
         </div>
-        <div style="margin-bottom:1em; padding:0.5em; background:#f8f8f8; border-radius:6px; border:1px solid #ddd; display:flex; align-items:center; gap:0.5em;">
-            <label style="font-weight:bold;"><input type="checkbox" id="liveSyncCheckbox"> Live Bulb Sync</label>
-            <button id="playSequenceBtn" type="button">Play</button>
-            <button id="nextStepBtn" type="button" style="display:none;">Next Step</button>
-            <button type="button" id="bulbOnBtn">Turn Bulb On</button>
-            <button type="button" id="bulbOffBtn">Turn Bulb Off</button>
-            <span id="bulbStatus" style="margin-left:1em; font-weight:bold;"></span>
+
+        <!-- Control Panel -->
+        <div class="mb-6 p-4 bg-white dark:bg-gray-800 rounded-lg shadow flex items-center gap-4 flex-wrap">
+            <label class="flex items-center gap-2 font-medium text-gray-700 dark:text-gray-300">
+                <input type="checkbox" id="liveSyncCheckbox" class="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500">
+                <span>Live Bulb Sync</span>
+            </label>
+            <button id="playSequenceBtn" type="button" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition">Play</button>
+            <button id="nextStepBtn" type="button" class="hidden px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">Next Step</button>
+            <button type="button" id="bulbOnBtn" class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition">Turn Bulb On</button>
+            <button type="button" id="bulbOffBtn" class="px-4 py-2 bg-gray-700 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-700 transition">Turn Bulb Off</button>
+            <span id="bulbStatus" class="ml-auto font-semibold text-gray-800 dark:text-gray-200"></span>
         </div>
-        <div id="editorUI" style="display:none;">
-            <button id="toggleJsonBtn" type="button" onclick="toggleJson()">Show Advanced JSON Editor</button>
-            <div id="jsonEditor" style="display:none; margin-top:1em;">
-                <form id="seqForm">
-                    <label>Paste Sequence JSON:<br>
-                        <textarea id="seqJson" rows="8" cols="60"></textarea>
-                    </label><br><br>
-                    <button type="button" onclick="parseSequence()">Parse & Visualize</button>
-                </form>
-            </div>
-            <div id="manualEntry">
-                <h3>Manual Entry</h3>
-                <button type="button" onclick="addStep()">Add Step</button>
-                <div id="steps"></div>
-            </div>
-            <div id="colorPickerModal"
-                style="display:none; position:fixed; top:10%; left:50%; transform:translateX(-50%); background:#fff; border:1px solid #ccc; padding:20px; z-index:1000;">
-                <div id="colorPicker"></div>
-                <div style="margin-top:1em;">
-                    <button id="applyColorBtn">Apply</button>
-                    <button id="cancelColorBtn">Cancel</button>
+
+        <!-- Editor UI -->
+        <div id="editorUI" class="hidden">
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <button id="toggleJsonBtn" type="button" onclick="toggleJson()" class="mb-4 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition">Show Advanced JSON Editor</button>
+                
+                <div id="jsonEditor" class="hidden mb-6 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <form id="seqForm">
+                        <label class="block mb-2 font-medium text-gray-700 dark:text-gray-300">Paste Sequence JSON:</label>
+                        <textarea id="seqJson" rows="8" class="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"></textarea>
+                        <button type="button" onclick="parseSequence()" class="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Parse & Visualize</button>
+                    </form>
                 </div>
+
+                <div id="manualEntry">
+                    <h3 class="text-xl font-bold text-gray-800 dark:text-white mb-4">Manual Entry</h3>
+                    <button type="button" onclick="addStep()" class="mb-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Add Step</button>
+                    <div id="steps" class="space-y-2"></div>
+                </div>
+
+                <!-- Color Picker Modal -->
+                <div id="colorPickerModal" class="hidden fixed top-1/4 left-1/2 -translate-x-1/2 bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6 z-50 border border-gray-200 dark:border-gray-700">
+                    <div id="colorPicker"></div>
+                    <div class="mt-4 flex gap-3">
+                        <button id="applyColorBtn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">Apply</button>
+                        <button id="cancelColorBtn" class="px-4 py-2 bg-gray-600 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-700 dark:hover:bg-gray-600 transition">Cancel</button>
+                    </div>
+                </div>
+
+                <hr class="my-6 border-gray-200 dark:border-gray-700">
+                
+                <div class="flex items-center gap-4 mb-4 flex-wrap">
+                    <label class="flex items-center gap-2 font-medium text-gray-700 dark:text-gray-300">
+                        <span>Start Time:</span>
+                        <input type="time" id="startTime" class="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </label>
+                    <label class="flex items-center gap-2 font-medium text-gray-700 dark:text-gray-300">
+                        <span>Duration (minutes):</span>
+                        <input type="number" id="duration" min="1" value="60" class="w-24 px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </label>
+                </div>
+                
+                <button onclick="saveSequence()" class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium text-lg">Save Sequence to KV</button>
+                <div id="result" class="mt-4 text-gray-800 dark:text-gray-200 font-medium"></div>
             </div>
-            <hr>
-            <label>Start Time: <input type="time" id="startTime"></label>
-            <label>Duration (minutes): <input type="number" id="duration" min="1" value="60"></label>
-            <br><br>
-            <button onclick="saveSequence()">Save Sequence to KV</button>
-            <div id="result"></div>
         </div>
     </div>
 </body>
