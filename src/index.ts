@@ -171,23 +171,68 @@ app.get('/', async (c) => {
   return c.env.ASSETS.fetch(new Request(url.origin + assetPath, c.req.raw));
 });
 
-// Endpoint to get sequence:morning from KV for webapp loading
-app.get('/get-sequence', async (c) => {
-  const seq = await c.env.KV.get('sequence:morning', 'json');
-  return c.json(seq || {});
+// Get all sequences
+app.get('/list-sequences', sessionHandler, async (c) => {
+  const list = await c.env.KV.list({ prefix: 'sequence:' });
+  const sequences = await Promise.all(
+    list.keys.map(async (key) => {
+      const data = await c.env.KV.get(key.name, 'json') as any;
+      return {
+        name: key.name.replace('sequence:', ''),
+        enabled: data?.enabled ?? false,
+        startTime: data?.startTime || '',
+        duration: data?.duration || 60,
+        stepCount: data?.steps?.length || 0
+      };
+    })
+  );
+  return c.json(sequences);
+});
+
+// Get a specific sequence
+app.get('/get-sequence/:name', sessionHandler, async (c) => {
+  const name = c.req.param('name');
+  const seq = await c.env.KV.get(`sequence:${name}`, 'json');
+  return c.json(seq || null);
 });
 
 // Save sequence to KV
-
-app.post('/save-sequence', async (c,) => {
+app.post('/save-sequence', sessionHandler, async (c) => {
   const body = await c.req.json();
-  const key = 'sequence:morning';
-  await c.env.KV.put(key, JSON.stringify(body));
-  return c.text(`Saved as ${key}`);
+  const name = body.name || 'morning';
+  const key = `sequence:${name}`;
+  const data = {
+    enabled: body.enabled ?? false,
+    startTime: body.startTime,
+    duration: body.duration,
+    steps: body.steps
+  };
+  await c.env.KV.put(key, JSON.stringify(data));
+  return c.json({ success: true, name });
+});
+
+// Delete a sequence
+app.delete('/delete-sequence/:name', sessionHandler, async (c) => {
+  const name = c.req.param('name');
+  await c.env.KV.delete(`sequence:${name}`);
+  return c.json({ success: true });
+});
+
+// Update sequence enabled status
+app.post('/update-sequence-status', sessionHandler, async (c) => {
+  const { name, enabled } = await c.req.json();
+  const key = `sequence:${name}`;
+  const seq = await c.env.KV.get(key, 'json') as any;
+  if (!seq) {
+    return c.json({ success: false, error: 'Sequence not found' }, 404);
+  }
+  seq.enabled = enabled;
+  await c.env.KV.put(key, JSON.stringify(seq));
+  return c.json({ success: true });
 });
 
 // POST /bulb/color { hue, saturation, brightness }
-app.post('/bulb/color', async (c) => {
+app.post('/bulb/color', sessionHandler, async (c) => {
   const body = await c.req.json();
   if (body.work_mode === 'white') {
       // White mode: clamp brightness to minimum 25
@@ -218,7 +263,7 @@ app.post('/bulb/color', async (c) => {
 });
 
 // POST /bulb/power { on }
-app.post('/bulb/power', async (c) => {
+app.post('/bulb/power', sessionHandler, async (c) => {
   const { on } = await c.req.json();
   await sendCommand([
     { code: 'switch_led', value: !!on }
@@ -264,60 +309,72 @@ app.get('/auth0-config', async (c) => {
 export default {
   fetch: app.fetch,
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    const key = 'sequence:morning';
-    const seqData = (await env.KV.get(key, 'json')) as {
-      steps: Array<any>;
-      startTime: string;
-      duration: number;
-    } | null;
-    if (!seqData || !seqData.steps || !seqData.startTime || !seqData.duration) {
-      console.error("Sequence data in KV is missing required fields. Cannot run scheduled event.");
-      return;
-    }
+    // Get all sequences with 'sequence:' prefix
+    const list = await env.KV.list({ prefix: 'sequence:' });
     const scheduledDate = new Date(controller.scheduledTime);
-    const [h, m] = seqData.startTime.split(':').map(Number);
-    const start = new Date(Date.UTC(scheduledDate.getUTCFullYear(), scheduledDate.getUTCMonth(), scheduledDate.getUTCDate(), h, m, 0, 0));
-    const durationMs = seqData.duration * 60 * 1000;
-    const end = new Date(start.getTime() + durationMs);
-    // Debug logging for time comparison
-    if (scheduledDate < start || scheduledDate > end) {
-      //console.info("Current time is outside the sequence window. No step played.");
-      return;
-    }
+    
+    // Process each sequence
+    for (const key of list.keys) {
+      const seqData = (await env.KV.get(key.name, 'json')) as {
+        enabled?: boolean;
+        steps: Array<any>;
+        startTime: string;
+        duration: number;
+      } | null;
+      
+      if (!seqData || !seqData.steps || !seqData.startTime || !seqData.duration) {
+        console.error(`Sequence ${key.name} is missing required fields. Skipping.`);
+        continue;
+      }
+      
+      // Skip disabled sequences
+      if (seqData.enabled === false) {
+        continue;
+      }
+      
+      const [h, m] = seqData.startTime.split(':').map(Number);
+      const start = new Date(Date.UTC(scheduledDate.getUTCFullYear(), scheduledDate.getUTCMonth(), scheduledDate.getUTCDate(), h, m, 0, 0));
+      const durationMs = seqData.duration * 60 * 1000;
+      const end = new Date(start.getTime() + durationMs);
+      
+      // Check if current time is within sequence window
+      if (scheduledDate < start || scheduledDate > end) {
+        continue;
+      }
 
-    // Which step?
-    const stepCount = seqData.steps.length;
-    const elapsedMs = scheduledDate.getTime() - start.getTime();
-    const stepIdx = Math.floor(elapsedMs / (durationMs / stepCount));
-    if (stepIdx < 0 || stepIdx >= stepCount) {
-      //console.info("Calculated step index is out of bounds. No step played.");
-      return;
-    }
-    const step = seqData.steps[stepIdx];
+      // Calculate which step to play
+      const stepCount = seqData.steps.length;
+      const elapsedMs = scheduledDate.getTime() - start.getTime();
+      const stepIdx = Math.floor(elapsedMs / (durationMs / stepCount));
+      if (stepIdx < 0 || stepIdx >= stepCount) {
+        continue;
+      }
+      const step = seqData.steps[stepIdx];
 
-    // Build and send command
-    let commands;
-    if (step.work_mode === 'white') {
-      commands = [
-        { code: 'work_mode', value: 'white' },
-        { code: 'bright_value', value: step.brightness },
-        { code: 'temp_value', value: step.temperature },
-        { code: 'switch_led', value: step.on }
-      ];
-    } else if (step.work_mode === 'colour') {
-      commands = [
-        { code: 'work_mode', value: 'colour' },
-        { code: 'colour_data', value: { h: step.hue, s: step.saturation, v: step.brightness } },
-        { code: 'switch_led', value: step.on }
-      ];
-    } else {
-      commands = [{ code: 'switch_led', value: step.on }];
-    }
-    try {
-      await sendCommand(commands, env);
-      console.info(`Played step ${stepIdx + 1}/${stepCount} at ${scheduledDate.toISOString()}`);
-    } catch (error) {
-      console.error('Error sending command:', error);
+      // Build and send command
+      let commands;
+      if (step.work_mode === 'white') {
+        commands = [
+          { code: 'work_mode', value: 'white' },
+          { code: 'bright_value', value: step.brightness },
+          { code: 'temp_value', value: step.temperature },
+          { code: 'switch_led', value: step.on }
+        ];
+      } else if (step.work_mode === 'colour') {
+        commands = [
+          { code: 'work_mode', value: 'colour' },
+          { code: 'colour_data', value: { h: step.hue, s: step.saturation, v: step.brightness } },
+          { code: 'switch_led', value: step.on }
+        ];
+      } else {
+        commands = [{ code: 'switch_led', value: step.on }];
+      }
+      try {
+        await sendCommand(commands, env);
+        console.info(`[${key.name}] Played step ${stepIdx + 1}/${stepCount} at ${scheduledDate.toISOString()}`);
+      } catch (error) {
+        console.error(`[${key.name}] Error sending command:`, error);
+      }
     }
   },
 } satisfies ExportedHandler<Env>;

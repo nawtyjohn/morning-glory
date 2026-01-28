@@ -114,14 +114,52 @@ renderSteps = function() {
 window.sequence = window.sequence || [];
 window.liveSyncEnabled = window.liveSyncEnabled || false;
 window.bulbIsOn = window.bulbIsOn || false;
+window.currentSequenceName = 'morning'; // Default sequence name
 let currentColorStep = null;
 let whiteSliderStep = null;
 
-// Load sequence from backend on page load
-async function loadSequenceFromBackend() {
+// Load list of sequences and populate dropdown
+async function loadSequenceList() {
     try {
-        const res = await fetch('/get-sequence');
+        const res = await fetch('/list-sequences');
+        const sequences = await res.json();
+        const selector = document.getElementById('sequenceSelector');
+        if (!selector) return;
+        
+        selector.innerHTML = '';
+        if (sequences.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = 'morning';
+            opt.textContent = 'morning (new)';
+            selector.appendChild(opt);
+            window.currentSequenceName = 'morning';
+        } else {
+            sequences.forEach(seq => {
+                const opt = document.createElement('option');
+                opt.value = seq.name;
+                opt.textContent = `${seq.name} (${seq.stepCount} steps${seq.enabled ? ', enabled' : ''})`;
+                selector.appendChild(opt);
+            });
+            window.currentSequenceName = sequences[0].name;
+            selector.value = window.currentSequenceName;
+        }
+        
+        await loadSequence(window.currentSequenceName);
+    } catch (e) {
+        console.error('Error loading sequence list:', e);
+        window.currentSequenceName = 'morning';
+        window.sequence = [];
+        renderSteps();
+    }
+}
+
+// Load a specific sequence
+async function loadSequence(name) {
+    try {
+        const res = await fetch(`/get-sequence/${name}`);
         const data = await res.json();
+        window.currentSequenceName = name;
+        
         if (data && Array.isArray(data.steps)) {
             window.sequence = data.steps;
             if (data.startTime) {
@@ -134,11 +172,17 @@ async function loadSequenceFromBackend() {
                 if (typeof durationVal === 'string') durationVal = Number(durationVal);
                 if (durationInput) durationInput.value = durationVal;
             }
+            // Update enabled checkbox
+            const enabledCheckbox = document.getElementById('sequenceEnabledCheckbox');
+            if (enabledCheckbox) enabledCheckbox.checked = data.enabled ?? false;
         } else {
             window.sequence = [];
+            const enabledCheckbox = document.getElementById('sequenceEnabledCheckbox');
+            if (enabledCheckbox) enabledCheckbox.checked = false;
         }
         renderSteps();
     } catch (e) {
+        console.error('Error loading sequence:', e);
         window.sequence = [];
         renderSteps();
     }
@@ -151,14 +195,82 @@ function setupTimeInputsRerender() {
     if (durationInput) durationInput.addEventListener('input', renderSteps);
 }
 
+function setupSequenceControls() {
+    // Sequence selector
+    const selector = document.getElementById('sequenceSelector');
+    if (selector) {
+        selector.addEventListener('change', async function() {
+            await loadSequence(this.value);
+        });
+    }
+    
+    // New sequence button
+    const newBtn = document.getElementById('newSequenceBtn');
+    if (newBtn) {
+        newBtn.addEventListener('click', async function() {
+            const name = prompt('Enter new sequence name:');
+            if (!name) return;
+            // Create new empty sequence
+            window.currentSequenceName = name;
+            window.sequence = [];
+            const startTimeInput = document.getElementById('startTime');
+            const durationInput = document.getElementById('duration');
+            if (startTimeInput) startTimeInput.value = '06:00';
+            if (durationInput) durationInput.value = '60';
+            const enabledCheckbox = document.getElementById('sequenceEnabledCheckbox');
+            if (enabledCheckbox) enabledCheckbox.checked = false;
+            renderSteps();
+            await loadSequenceList();
+            // Select the new sequence
+            if (selector) selector.value = name;
+        });
+    }
+    
+    // Delete sequence button
+    const deleteBtn = document.getElementById('deleteSequenceBtn');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', async function() {
+            if (!confirm(`Delete sequence "${window.currentSequenceName}"?`)) return;
+            try {
+                await fetch(`/delete-sequence/${window.currentSequenceName}`, { method: 'DELETE' });
+                await loadSequenceList();
+            } catch (e) {
+                alert('Error deleting sequence: ' + e.message);
+            }
+        });
+    }
+    
+    // Enabled checkbox
+    const enabledCheckbox = document.getElementById('sequenceEnabledCheckbox');
+    if (enabledCheckbox) {
+        enabledCheckbox.addEventListener('change', async function() {
+            try {
+                await fetch('/update-sequence-status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: window.currentSequenceName,
+                        enabled: this.checked
+                    })
+                });
+                await loadSequenceList();
+            } catch (e) {
+                console.error('Error updating sequence status:', e);
+            }
+        });
+    }
+}
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
-        loadSequenceFromBackend();
+        loadSequenceList();
         setupTimeInputsRerender();
+        setupSequenceControls();
     });
 } else {
-    loadSequenceFromBackend();
+    loadSequenceList();
     setupTimeInputsRerender();
+    setupSequenceControls();
 }
 
 function addStep() {
@@ -497,7 +609,12 @@ function hsvToRgb(h, s, v) {
 async function saveSequence() {
     const startTime = document.getElementById('startTime').value;
     const duration = Number(document.getElementById('duration').value);
+    const enabledCheckbox = document.getElementById('sequenceEnabledCheckbox');
+    const enabled = enabledCheckbox ? enabledCheckbox.checked : false;
+    
     const payload = {
+        name: window.currentSequenceName,
+        enabled: enabled,
         steps: window.sequence,
         startTime,
         duration
@@ -507,5 +624,7 @@ async function saveSequence() {
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify(payload)
     });
-    document.getElementById('result').innerText = await res.text();
+    const result = await res.json();
+    document.getElementById('result').innerText = result.success ? `Saved sequence "${result.name}"` : 'Error saving sequence';
+    await loadSequenceList();
 }

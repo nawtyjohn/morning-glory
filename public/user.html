@@ -33,6 +33,19 @@
     </div>
     <div id="app-container">
         <h2>Bulb Sequence Editor</h2>
+        <div style="margin-bottom:1em; padding:0.75em; background:#f0f0f0; border-radius:6px; border:1px solid #ccc;">
+            <div style="display:flex; align-items:center; gap:1em; margin-bottom:0.5em;">
+                <label style="font-weight:bold;">Sequence:
+                    <select id="sequenceSelector" style="padding:0.3em; font-size:1em;"></select>
+                </label>
+                <button type="button" id="newSequenceBtn">New Sequence</button>
+                <button type="button" id="deleteSequenceBtn" style="background:#e74c3c; color:white;">Delete</button>
+                <label style="margin-left:auto;">
+                    <input type="checkbox" id="sequenceEnabledCheckbox">
+                    <strong>Enabled (for cron)</strong>
+                </label>
+            </div>
+        </div>
         <div style="margin-bottom:1em; padding:0.5em; background:#f8f8f8; border-radius:6px; border:1px solid #ddd; display:flex; align-items:center; gap:0.5em;">
             <label style="font-weight:bold;"><input type="checkbox" id="liveSyncCheckbox"> Live Bulb Sync</label>
             <button id="playSequenceBtn" type="button">Play</button>
