@@ -293,16 +293,33 @@ function setupSequenceControls() {
     }
 }
 
+// Fetch available scenes from the bulb
+async function loadAvailableScenes() {
+    try {
+        const res = await fetch('/bulb/scenes');
+        const data = await res.json();
+        // Store scenes - data structure depends on what Tuya returns
+        window.availableScenes = data;
+    } catch (e) {
+        console.error('Error loading scenes:', e);
+        window.availableScenes = [];
+    }
+}
+
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
+        await loadAvailableScenes();
         loadSequenceList();
         setupTimeInputsRerender();
         setupSequenceControls();
     });
 } else {
-    loadSequenceList();
-    setupTimeInputsRerender();
-    setupSequenceControls();
+    (async () => {
+        await loadAvailableScenes();
+        loadSequenceList();
+        setupTimeInputsRerender();
+        setupSequenceControls();
+    })();
 }
 
 function addStep() {
@@ -350,18 +367,16 @@ function renderSteps() {
         }
         let html = '<div data-index="' + i + '">';
         html += '<span style="font-size:0.95em; color:#555; margin-right:8px; min-width:56px; display:inline-block;">' + stepTimes[i] + '</span>';
+        
+        // Color/White preview first (before mode dropdown)
         if (step.work_mode === 'colour') {
             let previewColor = color;
             if (currentColorStep === i && window.iroPicker) {
                 const c = window.iroPicker.color;
                 previewColor = c.hexString;
             }
-            html += '<span class="color-preview" style="background:' + previewColor + '; cursor:pointer;" onclick="openColorPicker(' + i + ')"></span>';
-            html += 'Mode: <select class="mode-select" data-index="' + i + '">';
-            html += '<option value="colour"' + (step.work_mode === 'colour' ? ' selected' : '') + '>Colour</option>';
-            html += '<option value="white"' + (step.work_mode === 'white' ? ' selected' : '') + '>White</option>';
-            html += '</select>';
-        } else {
+            html += '<span class="color-preview" style="background:' + previewColor + '; cursor:pointer; margin-right:8px;" onclick="openColorPicker(' + i + ')"></span>';
+        } else if (step.work_mode === 'white') {
             let bright = typeof step.brightness === 'number' ? step.brightness : 255;
             let temp = typeof step.temperature === 'number' ? step.temperature : 255;
             function tempToRGB(temp, bright) {
@@ -377,16 +392,37 @@ function renderSteps() {
             }
             let white = tempToRGB(temp, bright);
             html += '<span class="color-preview" style="background:' + white + '; margin-right:8px; border:2px solid #888; cursor:pointer;" title="Click to edit with sliders" onclick="showWhiteSliders(' + i + ')"></span>';
-            html += 'Mode: <select class="mode-select" data-index="' + i + '">';
-            html += '<option value="colour"' + (step.work_mode === 'colour' ? ' selected' : '') + '>Colour</option>';
-            html += '<option value="white"' + (step.work_mode === 'white' ? ' selected' : '') + '>White</option>';
-            html += '</select>';
+        }
+        
+        // Mode dropdown (without "Mode:" prefix)
+        html += '<select class="mode-select" data-index="' + i + '">';
+        html += '<option value="colour"' + (step.work_mode === 'colour' ? ' selected' : '') + '>Colour</option>';
+        html += '<option value="white"' + (step.work_mode === 'white' ? ' selected' : '') + '>White</option>';
+        html += '<option value="scene"' + (step.work_mode === 'scene' ? ' selected' : '') + '>Scene</option>';
+        html += '</select>';
+        
+        // Mode-specific UI (sliders/scene selector)
+        if (step.work_mode === 'white') {
             if (whiteSliderStep == i) {
                 html += '<div style="display:inline-block; margin-left:10px; vertical-align:middle;">';
-                html += '<label>Brightness: <input type="range" min="0" max="255" class="bright-slider" data-index="' + i + '" value="' + bright + '"></label>';
-                html += '<label style="margin-left:8px;">Temperature: <input type="range" min="0" max="255" class="temp-slider" data-index="' + i + '" value="' + temp + '"></label>';
+                html += '<label>Brightness: <input type="range" min="0" max="255" class="bright-slider" data-index="' + i + '" value="' + (typeof step.brightness === 'number' ? step.brightness : 255) + '"></label>';
+                html += '<label style="margin-left:8px;">Temperature: <input type="range" min="0" max="255" class="temp-slider" data-index="' + i + '" value="' + (typeof step.temperature === 'number' ? step.temperature : 255) + '"></label>';
                 html += '</div>';
             }
+        } else if (step.work_mode === 'scene') {
+            let sceneId = step.sceneId || '';
+            html += ' Scene: <select class="scene-select" data-index="' + i + '">';
+            html += '<option value="">-- Select Scene --</option>';
+            // Populate with available scenes if they exist
+            if (window.availableScenes && Array.isArray(window.availableScenes)) {
+                window.availableScenes.forEach(scene => {
+                    // Adjust based on actual data structure from Tuya
+                    const id = scene.code || scene.id || scene.scene_id || '';
+                    const name = scene.name || scene.code || id;
+                    html += '<option value="' + id + '"' + (sceneId === id ? ' selected' : '') + '>' + name + '</option>';
+                });
+            }
+            html += '</select>';
         }
         window.showWhiteSliders = function (i) {
             whiteSliderStep = Number(i);
@@ -403,6 +439,8 @@ function renderSteps() {
         el.onchange = function () {
             updateStep(this.dataset.index, 'work_mode', this.value);
             whiteSliderStep = null;
+            // Close color picker if it's open
+            closeColorPicker();
         };
     });
     stepsDiv.querySelectorAll('.hue-input').forEach(el => {
@@ -504,6 +542,9 @@ function renderSteps() {
     });
     stepsDiv.querySelectorAll('.on-checkbox').forEach(el => {
         el.onchange = function () { updateStep(this.dataset.index, 'on', this.checked); };
+    });
+    stepsDiv.querySelectorAll('.scene-select').forEach(el => {
+        el.onchange = function () { updateStep(this.dataset.index, 'sceneId', this.value); };
     });
     stepsDiv.querySelectorAll('.del-btn').forEach(el => {
         el.onclick = function () { removeStep(this.dataset.index); };

@@ -231,10 +231,19 @@ app.post('/update-sequence-status', sessionHandler, async (c) => {
   return c.json({ success: true });
 });
 
-// POST /bulb/color { hue, saturation, brightness }
+// POST /bulb/color { hue, saturation, brightness } or { work_mode: 'scene', sceneId }
 app.post('/bulb/color', sessionHandler, async (c) => {
   const body = await c.req.json();
-  if (body.work_mode === 'white') {
+  if (body.work_mode === 'scene') {
+    // Scene mode
+    const sceneId = body.sceneId || '';
+    await sendCommand([
+      { code: 'work_mode', value: 'scene' },
+      { code: 'scene_id', value: sceneId },
+      { code: 'switch_led', value: true }
+    ], c.env);
+    return c.text('Bulb scene updated');
+  } else if (body.work_mode === 'white') {
       // White mode: clamp brightness to minimum 25
       let brightness = body.brightness;
       if (brightness < 25) brightness = 25;
@@ -269,6 +278,37 @@ app.post('/bulb/power', sessionHandler, async (c) => {
     { code: 'switch_led', value: !!on }
   ], c.env);
   return c.text(`Bulb turned ${on ? 'on' : 'off'}`);
+});
+
+// GET /bulb/scenes - Get available scenes from the bulb
+app.get('/bulb/scenes', sessionHandler, async (c) => {
+  try {
+    const accessToken = await getAccessToken(c.env);
+    const path = `/v1.0/devices/${c.env.TUYA_DEVICE_ID}/status`;
+    
+    const signHeaders = signTuyaRequest('GET', path, '', c.env.TUYA_ACCESS_KEY, c.env.TUYA_SECRET_KEY, accessToken);
+    
+    const response = await fetch(`${c.env.TUYA_BASE_URL}${path}`, {
+      method: 'GET',
+      headers: {
+        ...signHeaders,
+        'access_token': accessToken,
+        'signVersion': '2.0',
+      },
+    });
+    
+    const result = await response.json<any>();
+    
+    if (!result.success) {
+      throw new Error(`Failed to get device status: ${result.msg}`);
+    }
+    
+    // Return the full status for now so we can see what's available
+    return c.json(result.result || []);
+  } catch (error) {
+    console.error('Error fetching scenes:', error);
+    return c.json({ error: 'Failed to fetch scenes' }, 500);
+  }
 });
 
 // Endpoint to serve Auth0 config to frontend
@@ -353,7 +393,16 @@ export default {
 
       // Build and send command
       let commands;
-      if (step.work_mode === 'white') {
+      if (step.work_mode === 'scene') {
+        commands = [
+          { code: 'work_mode', value: 'scene' },
+          { code: 'scene_id', value: step.sceneId || '' }
+        ];
+        // Include switch_led for first step (always), or for subsequent steps only if turning off
+        if (stepIdx === 0 || step.on === false) {
+          commands.push({ code: 'switch_led', value: step.on });
+        }
+      } else if (step.work_mode === 'white') {
         commands = [
           { code: 'work_mode', value: 'white' },
           { code: 'bright_value', value: step.brightness },
@@ -373,7 +422,7 @@ export default {
           commands.push({ code: 'switch_led', value: step.on });
         }
       } else {
-        // No color/white mode specified - only control power on first step or if turning off
+        // No color/white/scene mode specified - only control power on first step or if turning off
         if (stepIdx === 0 || step.on === false) {
           commands = [{ code: 'switch_led', value: step.on }];
         } else {
