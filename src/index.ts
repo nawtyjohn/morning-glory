@@ -117,6 +117,150 @@ async function sendCommand(commands: Array<{ code: string; value: any }>, env: E
   }
 }
 
+function normalizeSceneData(sceneData: unknown): unknown {
+  if (typeof sceneData === 'string') {
+    try {
+      return JSON.parse(sceneData);
+    } catch {
+      return sceneData;
+    }
+  }
+  return sceneData;
+}
+
+function clampSceneValue(sceneValue: unknown): { h: number; s: number; v: number } | null {
+  if (!sceneValue || typeof sceneValue !== 'object') return null;
+  const raw = sceneValue as { h?: unknown; s?: unknown; v?: unknown };
+  const h = Number(raw.h);
+  const s = Number(raw.s);
+  const v = Number(raw.v);
+  if (!Number.isFinite(h) || !Number.isFinite(s) || !Number.isFinite(v)) return null;
+  return {
+    h: Math.min(360, Math.max(1, Math.round(h))),
+    s: Math.min(255, Math.max(1, Math.round(s))),
+    v: Math.min(255, Math.max(1, Math.round(v)))
+  };
+}
+
+async function buildSceneCommandSets(
+  params: { sceneId?: string; sceneData?: unknown; sceneValue?: unknown; on?: boolean },
+  env: Env
+): Promise<Array<Array<{ code: string; value: any }>>> {
+  const sceneId = params.sceneId;
+  const switchOn = params.on ?? true;
+  const directSceneData = params.sceneData ?? params.sceneValue;
+
+  if (sceneId) {
+    if (sceneId.startsWith('flash_scene_')) {
+      const candidateValues: Array<unknown> = [];
+      const normalizedDirect = normalizeSceneData(directSceneData);
+      const directSceneValue = clampSceneValue(normalizedDirect) ?? normalizedDirect;
+      if (directSceneValue) {
+        candidateValues.push(directSceneValue);
+      }
+
+      const accessToken = await getAccessToken(env);
+      const statusPath = `/v1.0/devices/${env.TUYA_DEVICE_ID}/status`;
+      const signHeaders = signTuyaRequest('GET', statusPath, '', env.TUYA_ACCESS_KEY, env.TUYA_SECRET_KEY, accessToken);
+      const statusResponse = await fetch(`${env.TUYA_BASE_URL}${statusPath}`, {
+        method: 'GET',
+        headers: {
+          ...signHeaders,
+          'access_token': accessToken,
+          'signVersion': '2.0',
+        },
+      });
+      const statusResult = await statusResponse.json<any>();
+      if (!statusResult.success || !statusResult.result) {
+        throw new Error('Failed to get device status');
+      }
+      const deviceStatus = statusResult.result as Array<{ code: string; value: unknown }>;
+      const statusMatch = deviceStatus.find((item) => item.code === sceneId);
+      if (statusMatch && statusMatch.value !== undefined) {
+        const statusValue = normalizeSceneData(statusMatch.value);
+        candidateValues.push(statusValue);
+      }
+
+      if (!candidateValues.length) {
+        throw new Error(`Scene ${sceneId} requires a value`);
+      }
+
+      return candidateValues.flatMap((sceneValue) => [
+        [{ code: sceneId, value: sceneValue }],
+        [
+          { code: sceneId, value: sceneValue },
+          { code: 'switch_led', value: switchOn }
+        ]
+      ]);
+    }
+
+    const accessToken = await getAccessToken(env);
+    const statusPath = `/v1.0/devices/${env.TUYA_DEVICE_ID}/status`;
+    const signHeaders = signTuyaRequest('GET', statusPath, '', env.TUYA_ACCESS_KEY, env.TUYA_SECRET_KEY, accessToken);
+
+    const statusResponse = await fetch(`${env.TUYA_BASE_URL}${statusPath}`, {
+      method: 'GET',
+      headers: {
+        ...signHeaders,
+        'access_token': accessToken,
+        'signVersion': '2.0',
+      },
+    });
+
+    const statusResult = await statusResponse.json<any>();
+    if (!statusResult.success || !statusResult.result) {
+      throw new Error('Failed to get device status');
+    }
+
+    const deviceStatus = statusResult.result as Array<{ code: string; value: unknown }>;
+    const match = deviceStatus.find((item) => item.code === sceneId);
+    if (match && match.value !== undefined) {
+      const sceneValue = normalizeSceneData(match.value);
+      return [
+        [{ code: 'scene_data', value: sceneValue }],
+        [
+          { code: 'scene_data', value: sceneValue },
+          { code: 'switch_led', value: switchOn }
+        ]
+      ];
+    }
+
+    throw new Error(`Scene ${sceneId} not found in device status`);
+  }
+
+  if (directSceneData) {
+    const sceneValue = normalizeSceneData(directSceneData);
+    return [
+      [{ code: 'scene_data', value: sceneValue }],
+      [
+        { code: 'scene_data', value: sceneValue },
+        { code: 'switch_led', value: switchOn }
+      ]
+    ];
+  }
+
+  throw new Error('Must provide sceneId or sceneData for scene mode');
+}
+
+async function trySendCommandSets(
+  commandSets: Array<Array<{ code: string; value: any }>>,
+  env: Env
+): Promise<void> {
+  let lastError: unknown;
+  for (const commands of commandSets) {
+    try {
+      await sendCommand(commands, env);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (lastError instanceof Error) {
+    throw lastError;
+  }
+  throw new Error('Failed to send scene command');
+}
+
 
 // Block direct access to user.html and not-logged-in.html
 app.get('/user.html', (c) => c.text('Forbidden', 403));
@@ -222,61 +366,24 @@ app.delete('/delete-sequence/:name', sessionHandler, async (c) => {
 app.post('/bulb/color', sessionHandler, async (c) => {
   const body = await c.req.json();
   if (body.work_mode === 'scene') {
-    // Scene mode - get scene data from device status and send it
-    if (body.sceneId) {
-      console.log(`[scene mode] Activating scene: ${body.sceneId}`);
-      
-      // Get device status to retrieve the scene configuration
-      try {
-        const accessToken = await getAccessToken(c.env);
-        const statusPath = `/v1.0/devices/${c.env.TUYA_DEVICE_ID}/status`;
-        const signHeaders = signTuyaRequest('GET', statusPath, '', c.env.TUYA_ACCESS_KEY, c.env.TUYA_SECRET_KEY, accessToken);
-        
-        const statusResponse = await fetch(`${c.env.TUYA_BASE_URL}${statusPath}`, {
-          method: 'GET',
-          headers: {
-            ...signHeaders,
-            'access_token': accessToken,
-            'signVersion': '2.0',
-          },
-        });
-        
-        const statusResult = await statusResponse.json<any>();
-        if (!statusResult.success || !statusResult.result) {
-          throw new Error('Failed to get device status');
-        }
-        
-        // Find the scene data for this scene ID
-        const deviceStatus = statusResult.result;
-        let sceneData = null;
-        
-        for (const item of deviceStatus) {
-          if (item.code === body.sceneId) {
-            sceneData = item.value;
-            break;
-          }
-        }
-        
-        if (!sceneData) {
-          return c.json({ error: `Scene ${body.sceneId} not found in device status` }, 400);
-        }
-        
-        console.log(`[scene mode] Found scene data: ${sceneData}`);
-        
-        // Try sending with work_mode: "scene" first, then scene_data
-        const commands = [
-          { code: 'work_mode', value: 'scene' },
-          { code: 'scene_data', value: sceneData }
-        ];
-        console.log(`[scene mode] Sending commands:`, JSON.stringify(commands));
-        await sendCommand(commands, c.env);
-        return c.text('Bulb scene activated');
-      } catch (error) {
-        console.error('[scene mode] Error:', error);
-        return c.json({ error: 'Failed to activate scene' }, 500);
-      }
-    } else {
-      return c.json({ error: 'Must provide sceneId for scene mode' }, 400);
+    try {
+      const sceneValue = body.sceneValue ?? (body.sceneHue !== undefined ? { h: Number(body.sceneHue), s: 255, v: 255 } : undefined);
+      console.log(`[scene mode] Activating scene: ${body.sceneId || '[direct data]'}`);
+      const commandSets = await buildSceneCommandSets(
+        {
+          sceneId: body.sceneId,
+          sceneData: body.sceneData,
+          sceneValue,
+          on: body.on
+        },
+        c.env
+      );
+      console.log(`[scene mode] Attempting ${commandSets.length} command variants`);
+      await trySendCommandSets(commandSets, c.env);
+      return c.text('Bulb scene activated');
+    } catch (error) {
+      console.error('[scene mode] Error:', error);
+      return c.json({ error: 'Failed to activate scene' }, 500);
     }
   } else if (body.work_mode === 'white') {
       // White mode: clamp brightness to minimum 25
@@ -343,6 +450,60 @@ app.get('/bulb/scenes', sessionHandler, async (c) => {
   } catch (error) {
     console.error('Error fetching scenes:', error);
     return c.json({ error: 'Failed to fetch scenes' }, 500);
+  }
+});
+
+// GET /bulb/status - Get full device status from Tuya
+app.get('/bulb/status', sessionHandler, async (c) => {
+  try {
+    const accessToken = await getAccessToken(c.env);
+    const path = `/v1.0/devices/${c.env.TUYA_DEVICE_ID}/status`;
+    const signHeaders = signTuyaRequest('GET', path, '', c.env.TUYA_ACCESS_KEY, c.env.TUYA_SECRET_KEY, accessToken);
+
+    const response = await fetch(`${c.env.TUYA_BASE_URL}${path}`, {
+      method: 'GET',
+      headers: {
+        ...signHeaders,
+        'access_token': accessToken,
+        'signVersion': '2.0',
+      },
+    });
+
+    const result = await response.json<any>();
+    if (!result.success) {
+      throw new Error(`Failed to get device status: ${result.msg}`);
+    }
+    return c.json(result.result || []);
+  } catch (error) {
+    console.error('Error fetching status:', error);
+    return c.json({ error: 'Failed to fetch status' }, 500);
+  }
+});
+
+// GET /bulb/functions - Get device function definitions (supported commands)
+app.get('/bulb/functions', sessionHandler, async (c) => {
+  try {
+    const accessToken = await getAccessToken(c.env);
+    const path = `/v1.0/devices/${c.env.TUYA_DEVICE_ID}/functions`;
+    const signHeaders = signTuyaRequest('GET', path, '', c.env.TUYA_ACCESS_KEY, c.env.TUYA_SECRET_KEY, accessToken);
+
+    const response = await fetch(`${c.env.TUYA_BASE_URL}${path}`, {
+      method: 'GET',
+      headers: {
+        ...signHeaders,
+        'access_token': accessToken,
+        'signVersion': '2.0',
+      },
+    });
+
+    const result = await response.json<any>();
+    if (!result.success) {
+      throw new Error(`Failed to get device functions: ${result.msg}`);
+    }
+    return c.json(result.result || []);
+  } catch (error) {
+    console.error('Error fetching functions:', error);
+    return c.json({ error: 'Failed to fetch functions' }, 500);
   }
 });
 
@@ -429,19 +590,24 @@ export default {
       // Build and send command
       let commands;
       if (step.work_mode === 'scene') {
-        // For scenes, use scene ID codes like flash_scene_1
-        if (step.sceneId) {
-          commands = [
-            { code: step.sceneId, value: true }
-          ];
-        } else {
-          console.error(`Scene step missing sceneId`);
+        try {
+          const sceneValue = step.sceneValue ?? (step.sceneHue !== undefined ? { h: Number(step.sceneHue), s: 255, v: 255 } : undefined);
+          const commandSets = await buildSceneCommandSets(
+            {
+              sceneId: step.sceneId,
+              sceneData: step.sceneData,
+              sceneValue,
+              on: step.on
+            },
+            env
+          );
+          await trySendCommandSets(commandSets, env);
+          commands = null;
+        } catch (error) {
+          console.error(`Scene step error:`, error);
           continue;
         }
-        // Include switch_led for first step (always), or for subsequent steps only if turning off
-        if (stepIdx === 0 || step.on === false) {
-          commands.push({ code: 'switch_led', value: step.on });
-        }
+        continue;
       } else if (step.work_mode === 'white') {
         commands = [
           { code: 'work_mode', value: 'white' },

@@ -80,19 +80,20 @@ function resetPlaySequence() {
     highlightStep(-1);
     const playBtn = document.getElementById('playSequenceBtn');
     const nextBtn = document.getElementById('nextStepBtn');
-    if (playBtn) playBtn.style.display = '';
-    if (nextBtn) nextBtn.style.display = 'none';
+    if (playBtn) playBtn.classList.remove('hidden');
+    if (nextBtn) nextBtn.classList.add('hidden');
 }
 
 window.addEventListener('DOMContentLoaded', () => {
     const playBtn = document.getElementById('playSequenceBtn');
     const nextBtn = document.getElementById('nextStepBtn');
     if (playBtn && nextBtn) {
+        nextBtn.classList.add('hidden');
         playBtn.addEventListener('click', async () => {
             if (!window.sequence.length) return;
             await playStep(0);
-            playBtn.style.display = 'none';
-            nextBtn.style.display = '';
+            playBtn.classList.add('hidden');
+            nextBtn.classList.remove('hidden');
         });
         nextBtn.addEventListener('click', async () => {
             if (playingStepIdx === null) return;
