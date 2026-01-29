@@ -91,7 +91,11 @@ async function getAccessToken(env: Env): Promise<string> {
 }
 
 // Send command to Tuya device
-async function sendCommand(commands: Array<{ code: string; value: any }>, env: Env): Promise<void> {
+async function sendCommand(
+  commands: Array<{ code: string; value: any }>,
+  env: Env,
+  options: { logErrors?: boolean } = {}
+): Promise<void> {
   const accessToken = await getAccessToken(env);
   const path = `/v1.0/devices/${env.TUYA_DEVICE_ID}/commands`;
   const body = JSON.stringify({ commands });
@@ -112,7 +116,9 @@ async function sendCommand(commands: Array<{ code: string; value: any }>, env: E
   const result = await response.json<any>();
   console.log('Tuya API response:', JSON.stringify(result));
   if (!result.success) {
-    console.error('Tuya API command payload on error:', JSON.stringify(commands));
+    if (options.logErrors !== false) {
+      console.error('Tuya API command payload on error:', JSON.stringify(commands));
+    }
     throw new Error(`Failed to control light: ${result.msg} (code: ${result.code})`);
   }
 }
@@ -143,22 +149,17 @@ function clampSceneValue(sceneValue: unknown): { h: number; s: number; v: number
 }
 
 async function buildSceneCommandSets(
-  params: { sceneId?: string; sceneData?: unknown; sceneValue?: unknown; on?: boolean },
+  params: { sceneId?: string; sceneData?: unknown; sceneValue?: unknown; on?: boolean; allowSwitch?: boolean },
   env: Env
 ): Promise<Array<Array<{ code: string; value: any }>>> {
   const sceneId = params.sceneId;
   const switchOn = params.on ?? true;
+  const allowSwitch = params.allowSwitch ?? true;
   const directSceneData = params.sceneData ?? params.sceneValue;
 
   if (sceneId) {
     if (sceneId.startsWith('flash_scene_')) {
       const candidateValues: Array<unknown> = [];
-      const normalizedDirect = normalizeSceneData(directSceneData);
-      const directSceneValue = clampSceneValue(normalizedDirect) ?? normalizedDirect;
-      if (directSceneValue) {
-        candidateValues.push(directSceneValue);
-      }
-
       const accessToken = await getAccessToken(env);
       const statusPath = `/v1.0/devices/${env.TUYA_DEVICE_ID}/status`;
       const signHeaders = signTuyaRequest('GET', statusPath, '', env.TUYA_ACCESS_KEY, env.TUYA_SECRET_KEY, accessToken);
@@ -182,16 +183,29 @@ async function buildSceneCommandSets(
       }
 
       if (!candidateValues.length) {
+        const normalizedDirect = normalizeSceneData(directSceneData);
+        const directSceneValue = clampSceneValue(normalizedDirect) ?? normalizedDirect;
+        if (directSceneValue) {
+          candidateValues.push(directSceneValue);
+        }
+      }
+
+      if (!candidateValues.length) {
         throw new Error(`Scene ${sceneId} requires a value`);
       }
 
-      return candidateValues.flatMap((sceneValue) => [
-        [{ code: sceneId, value: sceneValue }],
-        [
-          { code: sceneId, value: sceneValue },
-          { code: 'switch_led', value: switchOn }
-        ]
-      ]);
+      return candidateValues.flatMap((sceneValue) => {
+        const base = [[{ code: sceneId, value: sceneValue }]];
+        if (!allowSwitch) {
+          return base;
+        }
+        return base.concat([
+          [
+            { code: sceneId, value: sceneValue },
+            { code: 'switch_led', value: switchOn }
+          ]
+        ]);
+      });
     }
 
     const accessToken = await getAccessToken(env);
@@ -216,13 +230,16 @@ async function buildSceneCommandSets(
     const match = deviceStatus.find((item) => item.code === sceneId);
     if (match && match.value !== undefined) {
       const sceneValue = normalizeSceneData(match.value);
-      return [
-        [{ code: 'scene_data', value: sceneValue }],
+      const base = [[{ code: 'scene_data', value: sceneValue }]];
+      if (!allowSwitch) {
+        return base;
+      }
+      return base.concat([
         [
           { code: 'scene_data', value: sceneValue },
           { code: 'switch_led', value: switchOn }
         ]
-      ];
+      ]);
     }
 
     throw new Error(`Scene ${sceneId} not found in device status`);
@@ -230,13 +247,16 @@ async function buildSceneCommandSets(
 
   if (directSceneData) {
     const sceneValue = normalizeSceneData(directSceneData);
-    return [
-      [{ code: 'scene_data', value: sceneValue }],
+    const base = [[{ code: 'scene_data', value: sceneValue }]];
+    if (!allowSwitch) {
+      return base;
+    }
+    return base.concat([
       [
         { code: 'scene_data', value: sceneValue },
         { code: 'switch_led', value: switchOn }
       ]
-    ];
+    ]);
   }
 
   throw new Error('Must provide sceneId or sceneData for scene mode');
@@ -247,13 +267,18 @@ async function trySendCommandSets(
   env: Env
 ): Promise<void> {
   let lastError: unknown;
+  let lastCommands: Array<{ code: string; value: any }> | null = null;
   for (const commands of commandSets) {
     try {
-      await sendCommand(commands, env);
+      await sendCommand(commands, env, { logErrors: false });
       return;
     } catch (error) {
       lastError = error;
+      lastCommands = commands;
     }
+  }
+  if (lastCommands) {
+    console.error('Tuya API command payload on error:', JSON.stringify(lastCommands));
   }
   if (lastError instanceof Error) {
     throw lastError;
@@ -374,7 +399,8 @@ app.post('/bulb/color', sessionHandler, async (c) => {
           sceneId: body.sceneId,
           sceneData: body.sceneData,
           sceneValue,
-          on: body.on
+          on: body.on,
+          allowSwitch: true
         },
         c.env
       );
@@ -597,7 +623,8 @@ export default {
               sceneId: step.sceneId,
               sceneData: step.sceneData,
               sceneValue,
-              on: step.on
+              on: step.on,
+              allowSwitch: stepIdx === 0 || step.on === false
             },
             env
           );
