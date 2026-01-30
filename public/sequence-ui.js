@@ -192,14 +192,37 @@ async function loadSequence(name) {
             // Update enabled checkbox
             const enabledCheckbox = document.getElementById('sequenceEnabledCheckbox');
             if (enabledCheckbox) enabledCheckbox.checked = data.enabled ?? false;
+            
+            // Convert bitflag to array of day numbers
+            const daysOfWeekFlag = data.daysOfWeek ?? 0;
+            const daysOfWeek = [];
+            for (let i = 0; i < 7; i++) {
+                if ((daysOfWeekFlag & (1 << i)) !== 0) {
+                    daysOfWeek.push(i);
+                }
+            }
+            
+            // Update days of week checkboxes
+            document.querySelectorAll('.daysOfWeekCheckbox').forEach(checkbox => {
+                const day = parseInt(checkbox.getAttribute('data-day'), 10);
+                checkbox.checked = daysOfWeek.includes(day);
+            });
+            
             if (editorUI) editorUI.style.display = 'block';
         } else {
             window.sequence = [];
             const enabledCheckbox = document.getElementById('sequenceEnabledCheckbox');
             if (enabledCheckbox) enabledCheckbox.checked = false;
+            
+            // Reset days of week checkboxes
+            document.querySelectorAll('.daysOfWeekCheckbox').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            
             if (editorUI) editorUI.style.display = 'block';
         }
         renderSteps();
+        syncJsonTextarea();
     } catch (e) {
         console.error('Error loading sequence:', e);
         window.sequence = [];
@@ -214,6 +237,23 @@ function setupTimeInputsRerender() {
     const durationInput = document.getElementById('duration');
     if (startTimeInput) startTimeInput.addEventListener('input', renderSteps);
     if (durationInput) durationInput.addEventListener('input', renderSteps);
+}
+
+// Sync JSON textarea with current sequence
+function syncJsonTextarea() {
+    const seqJson = document.getElementById('seqJson');
+    if (!seqJson) return;
+    
+    const startTime = document.getElementById('startTime')?.value || '';
+    const duration = Number(document.getElementById('duration')?.value) || 60;
+    
+    const jsonData = {
+        steps: window.sequence,
+        startTime: startTime,
+        duration: duration
+    };
+    
+    seqJson.value = JSON.stringify(jsonData, null, 2);
 }
 
 function setupSequenceControls() {
@@ -249,6 +289,12 @@ function setupSequenceControls() {
             if (durationInput) durationInput.value = '60';
             const enabledCheckbox = document.getElementById('sequenceEnabledCheckbox');
             if (enabledCheckbox) enabledCheckbox.checked = false;
+            
+            // Reset days of week checkboxes
+            document.querySelectorAll('.daysOfWeekCheckbox').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            
             const editorUI = document.getElementById('editorUI');
             if (editorUI) editorUI.style.display = 'block';
             renderSteps();
@@ -349,16 +395,26 @@ function renderSteps() {
     stepsDiv.innerHTML = '';
     const stepTimes = getStepTimes();
     window.sequence.forEach((step, i) => {
-        let color = '#fff';
+        let colorStyle = '#fff';
         if (step.work_mode === 'colour') {
-            let h = step.hue || 0;
-            let s = ((step.saturation || 0) / 255) * 100;
-            let v = ((step.brightness || 0) / 255) * 100;
-            if (window.iro && window.iro.Color) {
-                const c = new window.iro.Color({ h, s, v });
-                color = c.hexString;
-            } else {
-                color = hsvToRgb(step.hue, step.saturation, step.brightness);
+            // Convert HSV to HSL for CSS display
+            // HSV: h (0-360), s (0-255), v (0-255)
+            // HSL: h (0-360), s (0-100), l (0-100)
+            const h = step.hue || 0;
+            const svPercent = (step.saturation || 0) / 2.55;  // 0-255 -> 0-100
+            const vPercent = (step.brightness || 0) / 2.55;   // 0-255 -> 0-100
+            
+            // HSV to HSL conversion
+            const s = (svPercent * vPercent) / 100;
+            const l = (vPercent / 2) * (2 - (svPercent / 100));
+            const sHsl = l === 0 || l === 100 ? 0 : ((s / (1 - Math.abs(2 * l / 100 - 1))) * 100);
+            
+            colorStyle = `hsl(${h}, ${sHsl}%, ${l}%)`;
+            
+            // If color picker is open for this step, show the live color from picker
+            if (currentColorStep === i && window.iroPicker) {
+                const c = window.iroPicker.color;
+                colorStyle = `hsl(${c.hue}, ${c.saturation}%, ${c.value}%)`;
             }
         }
         let html = '<div data-index="' + i + '" class="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition">';
@@ -366,12 +422,7 @@ function renderSteps() {
         
         // Color/White preview first (before mode dropdown)
         if (step.work_mode === 'colour') {
-            let previewColor = color;
-            if (currentColorStep === i && window.iroPicker) {
-                const c = window.iroPicker.color;
-                previewColor = c.hexString;
-            }
-            html += '<span class="color-preview cursor-pointer" style="background:' + previewColor + ';" onclick="openColorPicker(' + i + ')"></span>';
+            html += '<span class="color-preview cursor-pointer" style="background:' + colorStyle + ';" onclick="openColorPicker(' + i + ')"></span>';
         } else if (step.work_mode === 'white') {
             let bright = typeof step.brightness === 'number' ? step.brightness : 255;
             let temp = typeof step.temperature === 'number' ? step.temperature : 255;
@@ -575,6 +626,9 @@ function renderSteps() {
     stepsDiv.querySelectorAll('.del-btn').forEach(el => {
         el.onclick = function () { removeStep(this.dataset.index); };
     });
+    
+    // Sync JSON textarea after rendering steps
+    syncJsonTextarea();
 }
 
 function openColorPicker(i) {
@@ -698,27 +752,26 @@ function removeStep(i) {
     renderSteps();
 }
 
-function hsvToRgb(h, s, v) {
-    s /= 255; v /= 255;
-    let c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c;
-    let r = 0, g = 0, b = 0;
-    if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; } else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
-    r = Math.round((r + m) * 255); g = Math.round((g + m) * 255); b = Math.round((b + m) * 255);
-    return 'rgb(' + r + ',' + g + ',' + b + ')';
-}
-
 async function saveSequence() {
     const startTime = document.getElementById('startTime').value;
     const duration = Number(document.getElementById('duration').value);
     const enabledCheckbox = document.getElementById('sequenceEnabledCheckbox');
     const enabled = enabledCheckbox ? enabledCheckbox.checked : false;
     
+    // Collect selected days of week as an array (will be converted to bitflag on backend)
+    const daysOfWeek = [];
+    document.querySelectorAll('.daysOfWeekCheckbox:checked').forEach(checkbox => {
+        const day = parseInt(checkbox.getAttribute('data-day'), 10);
+        daysOfWeek.push(day);
+    });
+    
     const payload = {
         name: window.currentSequenceName,
         enabled: enabled,
         steps: window.sequence,
         startTime,
-        duration
+        duration,
+        daysOfWeek: daysOfWeek
     };
     const res = await fetch('/save-sequence', {
         method: 'POST',
@@ -726,6 +779,14 @@ async function saveSequence() {
         body: JSON.stringify(payload)
     });
     const result = await res.json();
-    document.getElementById('result').innerText = result.success ? `Saved sequence "${result.name}"` : 'Error saving sequence';
+    const resultEl = document.getElementById('result');
+    resultEl.innerText = result.success ? `Saved sequence "${result.name}"` : 'Error saving sequence';
     await loadSequenceList();
+    
+    // Clear the message after 3 seconds
+    if (result.success) {
+        setTimeout(() => {
+            resultEl.innerText = '';
+        }, 3000);
+    }
 }

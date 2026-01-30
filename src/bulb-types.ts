@@ -12,9 +12,21 @@ export interface BulbStateSequenceItem {
   timestamp: number; // ms since start of recording
 }
 
+// DaysOfWeek flag enum for sequence scheduling
+export enum DaysOfWeek {
+  Sunday = 1 << 0,    // 1
+  Monday = 1 << 1,    // 2
+  Tuesday = 1 << 2,   // 4
+  Wednesday = 1 << 3, // 8
+  Thursday = 1 << 4,  // 16
+  Friday = 1 << 5,    // 32
+  Saturday = 1 << 6,  // 64
+}
+
 // BulbStateSequence is the full sequence to be replayed.
 export interface BulbStateSequence {
   steps: BulbStateSequenceItem[];
   recordedAt: string; // ISO date string
   label?: string; // optional user label
+  daysOfWeek?: number; // bitflag of DaysOfWeek enum values indicating which days the sequence runs
 }

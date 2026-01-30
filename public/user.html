@@ -51,10 +51,45 @@
                 </label>
                 <button type="button" id="newSequenceBtn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">New Sequence</button>
                 <button type="button" id="deleteSequenceBtn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">Delete</button>
-                <label class="ml-auto flex items-center gap-2 font-medium text-gray-700 dark:text-gray-300">
+                <label class="flex items-center gap-2 font-medium text-gray-700 dark:text-gray-300">
                     <input type="checkbox" id="sequenceEnabledCheckbox" class="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500">
                     <span>Enabled (for cron)</span>
                 </label>
+            </div>
+            
+            <!-- Days of Week Selector -->
+            <div class="mt-4 flex items-center gap-3 flex-wrap">
+                <label class="font-medium text-gray-700 dark:text-gray-300">Days of Week:</label>
+                <div class="flex gap-2">
+                    <label class="flex items-center gap-1 font-medium text-gray-700 dark:text-gray-300">
+                        <input type="checkbox" class="daysOfWeekCheckbox w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500" data-day="0">
+                        <span>Sun</span>
+                    </label>
+                    <label class="flex items-center gap-1 font-medium text-gray-700 dark:text-gray-300">
+                        <input type="checkbox" class="daysOfWeekCheckbox w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500" data-day="1">
+                        <span>Mon</span>
+                    </label>
+                    <label class="flex items-center gap-1 font-medium text-gray-700 dark:text-gray-300">
+                        <input type="checkbox" class="daysOfWeekCheckbox w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500" data-day="2">
+                        <span>Tue</span>
+                    </label>
+                    <label class="flex items-center gap-1 font-medium text-gray-700 dark:text-gray-300">
+                        <input type="checkbox" class="daysOfWeekCheckbox w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500" data-day="3">
+                        <span>Wed</span>
+                    </label>
+                    <label class="flex items-center gap-1 font-medium text-gray-700 dark:text-gray-300">
+                        <input type="checkbox" class="daysOfWeekCheckbox w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500" data-day="4">
+                        <span>Thu</span>
+                    </label>
+                    <label class="flex items-center gap-1 font-medium text-gray-700 dark:text-gray-300">
+                        <input type="checkbox" class="daysOfWeekCheckbox w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500" data-day="5">
+                        <span>Fri</span>
+                    </label>
+                    <label class="flex items-center gap-1 font-medium text-gray-700 dark:text-gray-300">
+                        <input type="checkbox" class="daysOfWeekCheckbox w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500" data-day="6">
+                        <span>Sat</span>
+                    </label>
+                </div>
             </div>
         </div>
 

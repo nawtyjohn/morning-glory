@@ -346,12 +346,21 @@ app.get('/list-sequences', sessionHandler, async (c) => {
   const sequences = await Promise.all(
     list.keys.map(async (key) => {
       const data = await c.env.KV.get(key.name, 'json') as any;
+      // Convert bitflag back to array of day numbers for frontend
+      const daysOfWeekFlag = data?.daysOfWeek ?? 0;
+      const daysOfWeek: number[] = [];
+      for (let i = 0; i < 7; i++) {
+        if ((daysOfWeekFlag & (1 << i)) !== 0) {
+          daysOfWeek.push(i);
+        }
+      }
       return {
         name: key.name.replace('sequence:', ''),
         enabled: data?.enabled ?? false,
         startTime: data?.startTime || '',
         duration: data?.duration || 60,
-        stepCount: data?.steps?.length || 0
+        stepCount: data?.steps?.length || 0,
+        daysOfWeek
       };
     })
   );
@@ -370,11 +379,19 @@ app.post('/save-sequence', sessionHandler, async (c) => {
   const body = await c.req.json();
   const name = body.name || 'morning';
   const key = `sequence:${name}`;
+  
+  // Convert daysOfWeek array to bitflag
+  let daysOfWeekFlag = 0;
+  if (Array.isArray(body.daysOfWeek)) {
+    daysOfWeekFlag = body.daysOfWeek.reduce((flag: number, day: number) => flag | (1 << day), 0);
+  }
+  
   const data = {
     enabled: body.enabled ?? false,
     startTime: body.startTime,
     duration: body.duration,
-    steps: body.steps
+    steps: body.steps,
+    daysOfWeek: daysOfWeekFlag
   };
   await c.env.KV.put(key, JSON.stringify(data));
   return c.json({ success: true, name });
@@ -574,11 +591,14 @@ export default {
     // Get all sequences with 'sequence:' prefix
     const list = await env.KV.list({ prefix: 'sequence:' });
     const scheduledDate = new Date(controller.scheduledTime);
+    const currentDayOfWeek = scheduledDate.getUTCDay(); // 0 = Sunday, 6 = Saturday
+    const dayFlag = 1 << currentDayOfWeek; // Convert day number to flag (1, 2, 4, 8, 16, 32, 64)
     
     // Process each sequence
     for (const key of list.keys) {
       const seqData = (await env.KV.get(key.name, 'json')) as {
         enabled?: boolean;
+        daysOfWeek?: number;
         steps: Array<any>;
         startTime: string;
         duration: number;
@@ -591,6 +611,12 @@ export default {
       
       // Skip disabled sequences
       if (seqData.enabled === false) {
+        continue;
+      }
+      
+      // Check if sequence runs on this day of week
+      // If daysOfWeek is not specified or is 0, run on all days (backward compatibility)
+      if (seqData.daysOfWeek && seqData.daysOfWeek > 0 && (seqData.daysOfWeek & dayFlag) === 0) {
         continue;
       }
       
