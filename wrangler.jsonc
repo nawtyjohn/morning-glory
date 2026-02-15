@@ -56,5 +56,10 @@
 			"id": "6b5facd80ef34219b6165136b6d0bcaa",
 			"preview_id": "8f7b898548d24460b40ca9f6648e0da0done"
 		}
-	]
+	],
+	"env": {
+		"preview": {
+			"name": "morning-glory-preview"
+		}
+	}
 }

@@ -108,17 +108,42 @@ async function updateAuthUI() {
     const isAuthenticated = await auth0Client.isAuthenticated();
     const loginBtn = document.getElementById('loginBtn');
     const userInfo = document.getElementById('userInfo');
+    const buildInfo = document.getElementById('buildInfo');
     const appContainer = document.getElementById('app-container');
     if (loginBtn) loginBtn.style.display = isAuthenticated ? 'none' : '';
     if (isAuthenticated) {
         const user = await auth0Client.getUser();
         if (userInfo) userInfo.textContent = `Logged in as: ${user.name || user.email}`;
         accessToken = await auth0Client.getTokenSilently();
+        if (buildInfo) await loadBuildInfo(buildInfo);
         if (appContainer) appContainer.style.display = '';
     } else {
         if (userInfo) userInfo.textContent = '';
+        if (buildInfo) buildInfo.textContent = '';
         accessToken = null;
         if (appContainer) appContainer.style.display = 'none';
+    }
+}
+
+async function loadBuildInfo(buildInfoEl) {
+    try {
+        const res = await fetch('/build-info', { credentials: 'same-origin' });
+        if (!res.ok) {
+            buildInfoEl.textContent = '';
+            buildInfoEl.removeAttribute('title');
+            return;
+        }
+        const data = await res.json();
+        const rawCommit = typeof data.gitCommit === 'string' ? data.gitCommit : '';
+        const shortCommit = rawCommit.length > 12 ? rawCommit.slice(0, 12) : rawCommit;
+        const rawBuildTime = typeof data.buildTime === 'string' ? data.buildTime : '';
+        const buildTimeText = rawBuildTime || 'unknown';
+        const commitText = shortCommit || 'unknown';
+        buildInfoEl.textContent = `Build ${buildTimeText} · ${commitText}`;
+        if (rawCommit) buildInfoEl.title = rawCommit;
+    } catch (e) {
+        buildInfoEl.textContent = '';
+        buildInfoEl.removeAttribute('title');
     }
 }
 

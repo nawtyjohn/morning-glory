@@ -17,6 +17,8 @@ interface Env {
   TUYA_DEVICE_ID: string;
   AUTH0_CLIENT_ID: string;
   AUTH0_DOMAIN: string;
+  BUILD_TIME?: string;
+  GIT_COMMIT?: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -293,6 +295,14 @@ app.get('/not-logged-in.html', (c) => c.text('Forbidden', 403));
 
 // Session check endpoint for frontend
 app.get('/session', sessionHandler);
+
+// Build metadata for signed-in users
+app.get('/build-info', sessionHandler, (c) => {
+  return c.json({
+    buildTime: c.env.BUILD_TIME ?? '',
+    gitCommit: c.env.GIT_COMMIT ?? ''
+  });
+});
 
 // Main entry: serve correct HTML based on Auth0 JWT/role
 app.get('/', async (c) => {
