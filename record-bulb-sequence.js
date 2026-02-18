@@ -12,10 +12,10 @@ const path = require('path');
 // Tuya API config (replace with your real values if needed)
 const TUYA_CONFIG = {
   baseUrl: 'https://openapi.tuyaeu.com',
-  accessKey: 'prfcknctpqmc3c7ptwn4',
-  secretKey: '71bfc400a62f4c74abb2a9d24c744bc0',
+  accessKey: 'XXXXXXXXXXXXXXXX',
+  secretKey: 'XXXXXXXXXXXXXXXXXXXXX',
 };
-const DEVICE_ID = '2784505598f4abfaaa40';
+const DEVICE_ID = 'XXXXXXXXXXXXXXXXXXX';
 
 let cachedToken = null;
 
